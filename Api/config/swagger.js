@@ -161,6 +161,22 @@ const options = {
                         refresh_token: { type: 'string' },
                     },
                 },
+                CheckoutRequest: {
+                    type: 'object',
+                    required: ['payment_method', 'customer_name', 'customer_email'],
+                    properties: {
+                        payment_method: { type: 'string', enum: ['card', 'boleto'] },
+                        customer_name: { type: 'string', example: 'Ricardo' },
+                        customer_email: { type: 'string', format: 'email', example: 'ricardo@email.com' },
+                    },
+                },
+                ConfirmPaymentRequest: {
+                    type: 'object',
+                    required: ['payment_intent_id'],
+                    properties: {
+                        payment_intent_id: { type: 'string' },
+                    },
+                },
             },
             responses: {
                 NaoAutorizado: { description: 'Token não fornecido', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro_Padrao' } } } },

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
 import { LIMITES_POR_PLANO } from '../services/usoService.js';
+import { buscarDetalhesDoPlano } from '../services/billingService.js';
 import { asyncHandler } from '../../utils/erros.js';
 
 const router = Router();
@@ -27,11 +28,13 @@ router.get('/', autenticarToken, asyncHandler(async (req, res) => {
 
         const usoHoje = parseInt(resultado.rows[0].count, 10);
         const limite = LIMITES_POR_PLANO[req.usuario.plan] ?? LIMITES_POR_PLANO.free;
+        const plano = buscarDetalhesDoPlano(req.usuario.plan);
 
     return res.status(200).json({
             uso_hoje: usoHoje,
             limite_diario: limite,
             restante: Math.max(limite - usoHoje, 0),
+            plan_details: plano,
     });
 }));
 

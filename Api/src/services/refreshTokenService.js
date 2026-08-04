@@ -45,3 +45,17 @@ export async function revogarRefreshToken(tokenBruto) {
 export async function revogarTodosOsTokens(userId) {
     await BD.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
 }
+
+// Consome o token em uma única operação. Assim, duas requisições concorrentes
+// não conseguem trocar o mesmo refresh token e criar sessões extras.
+export async function consumirRefreshToken(tokenBruto) {
+    const tokenHash = hashToken(tokenBruto);
+    const resultado = await BD.query(
+        `UPDATE refresh_tokens
+         SET revoked = true
+         WHERE token_hash = $1 AND revoked = false AND expires_at > NOW()
+         RETURNING user_id`,
+        [tokenHash]
+    );
+    return resultado.rows[0] || null;
+}

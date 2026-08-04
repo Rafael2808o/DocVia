@@ -75,11 +75,13 @@ CREATE INDEX idx_usage_logs_user_id_created_at ON usage_logs(user_id, created_at
 CREATE TABLE subscriptions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status          VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active' | 'canceled' | 'expired'
+    status          VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active' | 'pending' | 'canceled' | 'expired'
     started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at      TIMESTAMPTZ,
     payment_provider VARCHAR(30),           -- 'stripe', 'mercadopago', etc
-    external_id     VARCHAR(255)            -- id da assinatura no provedor de pagamento
+    external_id     VARCHAR(255),           -- id da assinatura no provedor de pagamento
+    amount          INTEGER,                -- valor em centavos
+    currency        VARCHAR(10)             -- moeda, ex: 'brl'
 );
 
 CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
@@ -90,7 +92,7 @@ CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
 -- Rode isso no pgAdmin DEPOIS do schema.sql original
 -- ============================================
  
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash  VARCHAR(64) NOT NULL UNIQUE, -- hash SHA-256 do token (nunca o token puro)
@@ -99,13 +101,8 @@ CREATE TABLE refresh_tokens (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
  
-CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
- 
-
-
- CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_analyses_document_created_at
     ON analyses(document_id, created_at DESC);
 
@@ -115,6 +112,41 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_action_created_at
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_active
     ON refresh_tokens(token_hash, expires_at)
     WHERE revoked = false;
+
+-- Migration 003: processamento assíncrono, privacidade e recursos do produto.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_consent_at TIMESTAMPTZ;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type VARCHAR(50) NOT NULL,
+    payload JSONB NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'queued',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    run_after TIMESTAMPTZ NOT NULL DEFAULT now(),
+    locked_at TIMESTAMPTZ,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_next ON jobs(status, run_after, created_at);
+
+CREATE TABLE IF NOT EXISTS login_security (
+    email VARCHAR(255) PRIMARY KEY,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS document_deadlines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    due_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_document_deadlines_due_date ON document_deadlines(due_date);
 
 DO $$
 BEGIN

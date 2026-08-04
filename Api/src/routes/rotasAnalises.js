@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
-import { reservarUsoNaTransacao } from '../services/usoService.js';
-import { analisarDocumentoComIA } from '../services/iaService.js';
+import { validarUuidParam } from '../middlewares/validar.js';
+import { enfileirarJob } from '../services/jobService.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 
 const router = Router();
@@ -24,7 +24,7 @@ const router = Router();
  *       404: { description: "Documento não encontrado" }
  *       429: { description: "Limite diário de análises atingido" }
  */
-router.post('/:id/analyze', autenticarToken, asyncHandler(async (req, res) => {
+router.post('/:id/analyze', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const documento = await BD.query(
             'SELECT * FROM documents WHERE id = $1 AND user_id = $2',
             [req.params.id, req.usuario.id_usuario]
@@ -38,43 +38,8 @@ router.post('/:id/analyze', autenticarToken, asyncHandler(async (req, res) => {
     if (!doc.extracted_text?.trim()) {
         throw new AppError('O documento ainda não possui texto extraído para análise', 422);
     }
-
-    const resultadoIA = await analisarDocumentoComIA(doc.extracted_text);
-    const cliente = await BD.connect();
-
-    try {
-        await cliente.query('BEGIN');
-        const usuario = await cliente.query('SELECT plan FROM users WHERE id = $1 FOR UPDATE', [req.usuario.id_usuario]);
-        const plano = usuario.rows[0]?.plan ?? 'free';
-        const podeUsar = await reservarUsoNaTransacao(cliente, req.usuario.id_usuario, plano);
-        if (!podeUsar) {
-            throw new AppError('Limite diário de análises atingido. Faça upgrade para o plano premium.', 429);
-        }
-
-        const analise = await cliente.query(
-                `INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response)
-                 VALUES ($1, $2, $3, $4, $5, $6)
-                 RETURNING *`,
-                [
-                    doc.id,
-                    resultadoIA.summary,
-                    JSON.stringify(resultadoIA.deadlines),
-                    JSON.stringify(resultadoIA.costs),
-                    JSON.stringify(resultadoIA.warnings),
-                    JSON.stringify(resultadoIA.raw),
-                ]
-            );
-
-        await cliente.query('UPDATE documents SET status = $1 WHERE id = $2', ['done', doc.id]);
-        await cliente.query('COMMIT');
-
-        return res.status(201).json({ message: 'Análise concluída', analise: analise.rows[0] });
-    } catch (error) {
-        await cliente.query('ROLLBACK').catch(() => undefined);
-        throw error;
-    } finally {
-        cliente.release();
-    }
+    const job = await enfileirarJob('analyze_document', { documentId: doc.id, userId: req.usuario.id_usuario });
+    return res.status(202).json({ message: 'Análise enfileirada', job: { id: job.id, status: job.status } });
 }));
 
 /**
@@ -93,7 +58,7 @@ router.post('/:id/analyze', autenticarToken, asyncHandler(async (req, res) => {
  *       200: { description: "Análise encontrada" }
  *       404: { description: "Documento ou análise não encontrados" }
  */
-router.get('/:id/analysis', autenticarToken, asyncHandler(async (req, res) => {
+router.get('/:id/analysis', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const documento = await BD.query(
             'SELECT id FROM documents WHERE id = $1 AND user_id = $2',
             [req.params.id, req.usuario.id_usuario]
@@ -112,7 +77,15 @@ router.get('/:id/analysis', autenticarToken, asyncHandler(async (req, res) => {
         throw new AppError('Esse documento ainda não foi analisado', 404);
     }
 
-    return res.status(200).json(analise.rows[0]);
+    const resultado = analise.rows[0];
+    const actionItems = resultado.raw_ai_response?.action_items ?? [];
+    const evidence = resultado.raw_ai_response?.evidence ?? [];
+
+    return res.status(200).json({
+        ...resultado,
+        action_items: actionItems,
+        evidence,
+    });
 }));
 
 export default router;

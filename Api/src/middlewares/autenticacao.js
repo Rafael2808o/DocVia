@@ -5,9 +5,9 @@ const SECRET_KEY = env.JWT_SECRET;
  
 export function autenticarToken(req, res, next) {
     const cabecalho = req.headers['authorization'];
-    const token = cabecalho && cabecalho.split(' ')[1];
+    const [tipo, token] = typeof cabecalho === 'string' ? cabecalho.split(' ') : [];
  
-    if (!token) {
+    if (tipo !== 'Bearer' || !token) {
         return res.status(401).json({ message: 'Token não fornecido' });
     }
  

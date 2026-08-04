@@ -3,12 +3,14 @@ import multer from 'multer';
 import path from 'node:path';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
-import { validar } from '../middlewares/validar.js';
+import { validar, validarUuidParam } from '../middlewares/validar.js';
 import { documentTypeSchema } from '../schemas/documentSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 import { salvarArquivo, removerArquivo, nomeArquivoDaUrl } from '../services/storageService.js';
-import { extrairTexto } from '../services/documentTextService.js';
+import { analisarDocumentoComIA } from '../services/iaService.js';
+import { parseBoletoInfo } from '../services/boletoService.js';
 import { env } from '../../config/env.js';
+import { enfileirarJob } from '../services/jobService.js';
 
 const router = Router();
 
@@ -60,18 +62,21 @@ router.post(
         }
 
         const arquivoSalvo = await salvarArquivo(req.file);
-        const textoExtraido = await extrairTexto(req.file);
-        const status = textoExtraido ? 'done' : 'pending';
-
         try {
             const resultado = await BD.query(
-                `INSERT INTO documents (user_id, original_name, document_type, storage_url, extracted_text, status)
-                 VALUES ($1, $2, $3, $4, $5, $6)
+                `INSERT INTO documents (user_id, original_name, document_type, storage_url, mime_type, status)
+                 VALUES ($1, $2, $3, $4, $5, 'pending')
              RETURNING *`,
-                [req.usuario.id_usuario, req.file.originalname, document_type, arquivoSalvo.url, textoExtraido, status]
+                [req.usuario.id_usuario, req.file.originalname, document_type, arquivoSalvo.url, req.file.mimetype]
             );
 
-            return res.status(201).json({ message: 'Documento enviado com sucesso', documento: resultado.rows[0] });
+            const job = await enfileirarJob('extract_document_text', { documentId: resultado.rows[0].id });
+
+            return res.status(202).json({
+                message: 'Documento enviado e aguardando extração de texto',
+                documento: resultado.rows[0],
+                job: { id: job.id, status: job.status },
+            });
         } catch (error) {
             await removerArquivo(arquivoSalvo.caminho);
             throw error;
@@ -91,10 +96,49 @@ router.post(
  */
 router.get('/', autenticarToken, asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'SELECT * FROM documents WHERE user_id = $1 ORDER BY created_at DESC',
+        `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
+                a.costs AS analysis_costs, a.warnings AS analysis_warnings,
+                a.created_at AS analysis_created_at
+         FROM documents d
+         LEFT JOIN LATERAL (
+             SELECT summary, deadlines, costs, warnings, created_at
+             FROM analyses
+             WHERE document_id = d.id
+             ORDER BY created_at DESC
+             LIMIT 1
+         ) a ON true
+         WHERE d.user_id = $1
+         ORDER BY d.created_at DESC`,
         [req.usuario.id_usuario]
     );
     return res.status(200).json(resultado.rows);
+}));
+
+// Radar de prazos: o cliente pode mostrar alertas e criar notificações locais.
+router.get('/deadlines/upcoming', autenticarToken, asyncHandler(async (req, res) => {
+    const dias = Math.min(Math.max(Number.parseInt(req.query.days, 10) || 30, 1), 365);
+    const resultado = await BD.query(
+        `SELECT dd.id, dd.description, dd.due_date, d.id AS document_id, d.original_name, d.document_type
+           FROM document_deadlines dd
+           JOIN documents d ON d.id = dd.document_id
+          WHERE d.user_id = $1
+            AND dd.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + $2::integer
+          ORDER BY dd.due_date ASC`,
+        [req.usuario.id_usuario, dias]
+    );
+    return res.status(200).json({ days: dias, deadlines: resultado.rows });
+}));
+
+router.get('/jobs/:jobId', autenticarToken, validarUuidParam('jobId'), asyncHandler(async (req, res) => {
+    const resultado = await BD.query(
+        `SELECT id, type, status, attempts, max_attempts, created_at, completed_at, last_error
+           FROM jobs
+          WHERE id = $1
+            AND (payload->>'userId' = $2 OR payload->>'documentId' IN (SELECT id::text FROM documents WHERE user_id = $2))`,
+        [req.params.jobId, req.usuario.id_usuario]
+    );
+    if (!resultado.rows[0]) throw new AppError('Job não encontrado', 404);
+    return res.status(200).json({ job: resultado.rows[0] });
 }));
 
 /**
@@ -113,9 +157,20 @@ router.get('/', autenticarToken, asyncHandler(async (req, res) => {
  *       200: { description: "Documento encontrado" }
  *       404: { description: "Documento não encontrado" }
  */
-router.get('/:id', autenticarToken, asyncHandler(async (req, res) => {
+router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'SELECT * FROM documents WHERE id = $1 AND user_id = $2',
+        `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
+                a.costs AS analysis_costs, a.warnings AS analysis_warnings,
+                a.created_at AS analysis_created_at
+         FROM documents d
+         LEFT JOIN LATERAL (
+             SELECT summary, deadlines, costs, warnings, created_at
+             FROM analyses
+             WHERE document_id = d.id
+             ORDER BY created_at DESC
+             LIMIT 1
+         ) a ON true
+         WHERE d.id = $1 AND d.user_id = $2`,
         [req.params.id, req.usuario.id_usuario]
     );
 
@@ -142,7 +197,7 @@ router.get('/:id', autenticarToken, asyncHandler(async (req, res) => {
  *       200: { description: "Arquivo original" }
  *       404: { description: "Documento ou arquivo não encontrado" }
  */
-router.get('/:id/file', autenticarToken, asyncHandler(async (req, res) => {
+router.get('/:id/file', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
         'SELECT original_name, storage_url FROM documents WHERE id = $1 AND user_id = $2',
         [req.params.id, req.usuario.id_usuario]
@@ -157,8 +212,81 @@ router.get('/:id/file', autenticarToken, asyncHandler(async (req, res) => {
 
     return res.sendFile(nomeArquivo, {
         root: path.resolve(env.STORAGE_DIR),
-        headers: { 'Content-Disposition': `attachment; filename="${resultado.rows[0].original_name.replace(/"/g, '')}"` },
+        headers: { 'Content-Disposition': `attachment; filename="${resultado.rows[0].original_name.replace(/[\r\n"]/g, '')}"` },
     });
+}));
+
+/**
+ * @swagger
+ * /documents/{id}/boleto:
+ *   get:
+ *     tags: ["Documentos"]
+ *     summary: "Extrai as informações do boleto de um documento do tipo boleto"
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: "Informações do boleto extraídas" }
+ *       404: { description: "Documento não encontrado" }
+ */
+router.get('/:id/boleto', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
+    const resultado = await BD.query(
+        'SELECT document_type, extracted_text FROM documents WHERE id = $1 AND user_id = $2',
+        [req.params.id, req.usuario.id_usuario]
+    );
+
+    if (resultado.rows.length === 0) {
+        throw new AppError('Documento não encontrado', 404);
+    }
+
+    const documento = resultado.rows[0];
+    if (documento.document_type !== 'boleto') {
+        throw new AppError('Documento não é do tipo boleto', 400);
+    }
+
+    const boletoInfo = parseBoletoInfo(documento.extracted_text);
+    return res.status(200).json({ boleto: boletoInfo });
+}));
+
+/**
+ * @swagger
+ * /documents/{id}/contract-summary:
+ *   get:
+ *     tags: ["Documentos"]
+ *     summary: "Gera um resumo especializado de contrato"
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: "Resumo de contrato gerado" }
+ */
+router.get('/:id/contract-summary', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
+    const resultado = await BD.query(
+        'SELECT document_type, extracted_text FROM documents WHERE id = $1 AND user_id = $2',
+        [req.params.id, req.usuario.id_usuario]
+    );
+
+    if (resultado.rows.length === 0) {
+        throw new AppError('Documento não encontrado', 404);
+    }
+
+    const documento = resultado.rows[0];
+    if (documento.document_type !== 'contrato') {
+        throw new AppError('Documento não é do tipo contrato', 400);
+    }
+
+    if (!documento.extracted_text?.trim()) {
+        throw new AppError('Documento não possui texto extraído para análise', 422);
+    }
+
+    const resumo = await analisarDocumentoComIA(documento.extracted_text, 'contrato');
+    return res.status(200).json({ contract_summary: resumo });
 }));
 
 /**
@@ -177,14 +305,19 @@ router.get('/:id/file', autenticarToken, asyncHandler(async (req, res) => {
  *       200: { description: "Documento removido com sucesso" }
  *       404: { description: "Documento não encontrado" }
  */
-router.delete('/:id', autenticarToken, asyncHandler(async (req, res) => {
+router.delete('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING id',
+        'DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING storage_url',
         [req.params.id, req.usuario.id_usuario]
     );
 
     if (resultado.rows.length === 0) {
         throw new AppError('Documento não encontrado', 404);
+    }
+
+    const nomeArquivo = nomeArquivoDaUrl(resultado.rows[0].storage_url);
+    if (nomeArquivo) {
+        await removerArquivo(path.join(env.STORAGE_DIR, nomeArquivo));
     }
 
     return res.status(200).json({ message: 'Documento removido com sucesso' });

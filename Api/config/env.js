@@ -16,6 +16,9 @@ const ambienteSchema = z.object({
     GEMINI_API_KEY: z.string().optional(),
     GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
     OPENAI_API_KEY: z.string().optional(),
+    PAYMENT_PROVIDER: z.enum(['none', 'stripe']).default('none'),
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().optional(),
     API_URL: z.string().url().optional(),
     API_VERSION: z.string().default('1.0.0'),
     CORS_ORIGINS: z.string().default('*'),
@@ -24,6 +27,20 @@ const ambienteSchema = z.object({
     TESSERACT_PATH: z.string().optional(),
     OCR_ENABLED: z.enum(['true', 'false']).default('true').transform((valor) => valor === 'true'),
     OCR_LANGUAGE: z.string().default('por'),
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+    AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(8),
+    FAILED_LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    FAILED_LOGIN_LOCKOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+}).superRefine((configuracao, contexto) => {
+    if (configuracao.NODE_ENV === 'production' && configuracao.CORS_ORIGINS === '*') {
+        contexto.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['CORS_ORIGINS'],
+            message: 'em produção, informe as origens permitidas separadas por vírgula; * não é aceito',
+        });
+    }
 });
 
 const resultado = ambienteSchema.safeParse(process.env);

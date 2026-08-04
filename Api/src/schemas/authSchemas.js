@@ -29,3 +29,13 @@ export const loginSchema = z.object({
 export const refreshSchema = z.object({
     refresh_token: z.string({ required_error: 'refresh_token é obrigatório' }).min(1),
 });
+
+export const consentSchema = z.object({
+    accepted: z.literal(true, { errorMap: () => ({ message: 'Você precisa aceitar a política de privacidade' }) }),
+});
+
+export const deleteAccountSchema = z.object({
+    confirmation: z.literal('DELETE_MY_ACCOUNT', {
+        errorMap: () => ({ message: 'confirmation deve ser DELETE_MY_ACCOUNT' }),
+    }),
+});

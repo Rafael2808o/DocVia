@@ -3,10 +3,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { BD } from '../../db.js';
 import { validar } from '../middlewares/validar.js';
-import { limitadorAuth } from '../middlewares/limitadores.js';
+import { limitadorAuth, verificarBloqueioLogin, registrarFalhaLogin, registrarSucessoLogin } from '../middlewares/limitadores.js';
 import { registerSchema, loginSchema, refreshSchema } from '../schemas/authSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
-import { criarRefreshToken, validarRefreshToken, revogarRefreshToken } from '../services/refreshTokenService.js';
+import { criarRefreshToken, consumirRefreshToken, revogarRefreshToken } from '../services/refreshTokenService.js';
 import { env } from '../../config/env.js';
 
 const router = Router();
@@ -90,7 +90,7 @@ router.post('/register', limitadorAuth, validar(registerSchema), asyncHandler(as
  *             schema: { $ref: '#/components/schemas/Resposta_Login' }
  *       401: { description: "Email ou senha inválidos" }
  */
-router.post('/login', limitadorAuth, validar(loginSchema), asyncHandler(async (req, res) => {
+router.post('/login', limitadorAuth, validar(loginSchema), verificarBloqueioLogin, asyncHandler(async (req, res) => {
     const { email, senha } = req.body;
 
     const resultado = await BD.query(
@@ -99,6 +99,7 @@ router.post('/login', limitadorAuth, validar(loginSchema), asyncHandler(async (r
     );
 
     if (resultado.rows.length === 0) {
+        await registrarFalhaLogin(email);
         throw new AppError('Email ou senha inválidos', 401);
     }
 
@@ -106,9 +107,11 @@ router.post('/login', limitadorAuth, validar(loginSchema), asyncHandler(async (r
     const senhaCorreta = usuario.password_hash ? await bcrypt.compare(senha, usuario.password_hash) : false;
 
     if (!senhaCorreta) {
+        await registrarFalhaLogin(email);
         throw new AppError('Email ou senha inválidos', 401);
     }
 
+    await registrarSucessoLogin(email);
     const accessToken = gerarAccessToken(usuario);
     const refreshToken = await criarRefreshToken(usuario.id);
 
@@ -147,7 +150,7 @@ router.post('/login', limitadorAuth, validar(loginSchema), asyncHandler(async (r
 router.post('/refresh', validar(refreshSchema), asyncHandler(async (req, res) => {
     const { refresh_token } = req.body;
 
-    const registro = await validarRefreshToken(refresh_token);
+    const registro = await consumirRefreshToken(refresh_token);
     if (!registro) {
         throw new AppError('Refresh token inválido, expirado ou revogado', 401);
     }
@@ -158,7 +161,6 @@ router.post('/refresh', validar(refreshSchema), asyncHandler(async (req, res) =>
     }
 
     const accessToken = gerarAccessToken(resultado.rows[0]);
-    await revogarRefreshToken(refresh_token);
     const novoRefreshToken = await criarRefreshToken(resultado.rows[0].id);
     return res.status(200).json({ access_token: accessToken, refresh_token: novoRefreshToken });
 }));

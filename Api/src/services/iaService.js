@@ -2,10 +2,14 @@ import { AppError } from '../../utils/erros.js';
 import { env, temGeminiConfigurada, temOpenAiConfigurada } from '../../config/env.js';
 
 const INSTRUCAO_SISTEMA =
-    'Você é um assistente que explica documentos burocráticos (contratos, exames, boletos, termos de uso) ' +
-    'em linguagem simples para leigos. Responda somente JSON válido com os campos: ' +
+    'Você é um assistente de documentos que explica contratos, boletos, exames e termos em linguagem simples. ' +
+    'Responda somente JSON válido com os campos: ' +
     'summary (string), deadlines (array de objetos {descricao, data}), ' +
-    'costs (array de objetos {descricao, valor}), warnings (array de objetos {descricao}).';
+    'costs (array de objetos {descricao, valor}), warnings (array de objetos {descricao}), ' +
+    'action_items (array de objetos {descricao, importance}), ' +
+    'evidence (array de objetos {claim, source_excerpt}), ' +
+    'document_type (string com o tipo de documento mais provável). ' +
+    'Se algum campo não se aplicar, retorne um array vazio.';
 
 async function chamarGemini(textoExtraido) {
     if (!temGeminiConfigurada()) throw new AppError('Serviço Gemini não configurado', 503);
@@ -62,10 +66,18 @@ async function chamarOpenAi(textoExtraido) {
     };
 }
 
-export async function analisarDocumentoComIA(textoExtraido) {
+export async function analisarDocumentoComIA(textoExtraido, documentType = 'outro') {
+    const instrucoesExtras = documentType === 'boleto'
+        ? 'No boleto, identifique valor, data de vencimento, multas, instruções e data de pagamento.'
+        : documentType === 'contrato'
+            ? 'No contrato, extraia obrigações, prazos, multas, partes envolvidas e pontos de atenção.'
+            : 'Analise o documento e extraia os pontos principais com clareza.';
+
+    const corpoTexto = `${instrucoesExtras}\nTexto do documento:\n${textoExtraido}`;
+
     const resultado = env.AI_PROVIDER === 'gemini'
-        ? await chamarGemini(textoExtraido)
-        : await chamarOpenAi(textoExtraido);
+        ? await chamarGemini(corpoTexto)
+        : await chamarOpenAi(corpoTexto);
 
     if (!resultado.conteudo) {
         throw new AppError('Resposta inválida recebida do serviço de IA', 502);
@@ -87,6 +99,9 @@ export async function analisarDocumentoComIA(textoExtraido) {
         deadlines: Array.isArray(conteudo.deadlines) ? conteudo.deadlines : [],
         costs: Array.isArray(conteudo.costs) ? conteudo.costs : [],
         warnings: Array.isArray(conteudo.warnings) ? conteudo.warnings : [],
+        action_items: Array.isArray(conteudo.action_items) ? conteudo.action_items : [],
+        evidence: Array.isArray(conteudo.evidence) ? conteudo.evidence : [],
+        document_type: typeof conteudo.document_type === 'string' ? conteudo.document_type : null,
         raw: resultado.bruto,
     };
 }

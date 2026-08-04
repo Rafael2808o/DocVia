@@ -14,16 +14,32 @@ import { tratarErros, rotaNaoEncontrada } from './src/middlewares/tratarErros.js
 
 import rotasAutenticacao from './src/routes/rotasAutenticacao.js';
 import rotasUsuarios from './src/routes/rotasUsuarios.js';
+import rotasBilling from './src/routes/rotasBilling.js';
 import rotasDocumentos from './src/routes/rotasDocumentos.js';
 import rotasAnalises from './src/routes/rotasAnalises.js';
 import rotasUso from './src/routes/rotasUso.js';
+import { iniciarWorker } from './src/services/jobService.js';
+import { extrairTextoDoDocumento, analisarDocumentoEmSegundoPlano } from './src/services/documentProcessingService.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
 // Segurança básica de headers HTTP (evita alguns ataques comuns tipo clickjacking)
 app.use(helmet());
-app.use(cors({ origin: origensCors() }));
-app.use(express.json());
+app.use(cors({
+    origin: origensCors(),
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(express.json({
+    limit: '1mb',
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    },
+}));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 // Loga cada requisição (método, rota, status, tempo de resposta)
 app.use(pinoHttp({ logger }));
@@ -32,9 +48,12 @@ app.use(pinoHttp({ logger }));
 app.use(limitadorGeral);
 
 // Documentação interativa em http://localhost:3000/docs
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+if (env.NODE_ENV !== 'production') {
+    app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 app.use('/auth', rotasAutenticacao);
 app.use('/users', rotasUsuarios);
+app.use('/billing', rotasBilling);
 app.use('/documents', rotasDocumentos);
 app.use('/documents', rotasAnalises);
 app.use('/usage', rotasUso);
@@ -48,10 +67,16 @@ export { app };
 
 export async function iniciarServidor() {
     await testarConexao();
-    return app.listen(env.PORT, () => {
+    const pararWorker = iniciarWorker({
+        extract_document_text: extrairTextoDoDocumento,
+        analyze_document: analisarDocumentoEmSegundoPlano,
+    });
+    const servidor = app.listen(env.PORT, () => {
         logger.info(`Servidor rodando em http://localhost:${env.PORT}`);
         logger.info(`Swagger disponível em http://localhost:${env.PORT}/docs`);
     });
+    servidor.on('close', pararWorker);
+    return servidor;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
