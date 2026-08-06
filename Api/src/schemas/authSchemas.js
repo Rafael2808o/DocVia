@@ -1,4 +1,22 @@
 import { z } from 'zod';
+import { env } from '../../config/env.js';
+
+const emailSchema = z
+    .string({ required_error: 'E-mail é obrigatório' })
+    .trim()
+    .toLowerCase()
+    .email('E-mail inválido');
+
+// Em desenvolvimento/testes, o banco pode usar um identificador simples para
+// agilizar os testes locais. Em produção, o contrato continua exigindo e-mail.
+const loginIdentifierSchema = env.NODE_ENV === 'production'
+    ? emailSchema
+    : z
+        .string({ required_error: 'E-mail ou usuário é obrigatório' })
+        .trim()
+        .toLowerCase()
+        .min(3, 'E-mail ou usuário deve ter pelo menos 3 caracteres')
+        .max(255, 'E-mail ou usuário muito longo');
 
 export const registerSchema = z.object({
     nome: z
@@ -6,11 +24,7 @@ export const registerSchema = z.object({
         .trim()
         .min(2, 'Nome deve ter pelo menos 2 caracteres')
         .max(150, 'Nome muito longo'),
-    email: z
-        .string({ required_error: 'Email é obrigatório' })
-        .trim()
-        .toLowerCase()
-        .email('Email inválido'),
+    email: loginIdentifierSchema,
     senha: z
         .string({ required_error: 'Senha é obrigatória' })
         .min(8, 'Senha deve ter pelo menos 8 caracteres')
@@ -18,11 +32,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-    email: z
-        .string({ required_error: 'Email é obrigatório' })
-        .trim()
-        .toLowerCase()
-        .email('Email inválido'),
+    email: loginIdentifierSchema,
     senha: z.string({ required_error: 'Senha é obrigatória' }).min(1, 'Senha é obrigatória'),
 });
 
@@ -35,7 +45,8 @@ export const consentSchema = z.object({
 });
 
 export const deleteAccountSchema = z.object({
-    confirmation: z.literal('DELETE_MY_ACCOUNT', {
-        errorMap: () => ({ message: 'confirmation deve ser DELETE_MY_ACCOUNT' }),
-    }),
+    password: z.string({ required_error: 'Senha é obrigatória' }).min(1, 'Senha é obrigatória').max(72),
 });
+
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+export const resetPasswordSchema = z.object({ token: z.string().length(64), senha: z.string().min(8).max(72) });

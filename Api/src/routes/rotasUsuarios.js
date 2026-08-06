@@ -8,6 +8,7 @@ import { consentSchema, deleteAccountSchema } from '../schemas/authSchemas.js';
 import { nomeArquivoDaUrl, removerArquivo } from '../services/storageService.js';
 import { env } from '../../config/env.js';
 import path from 'node:path';
+import bcrypt from 'bcrypt';
 
 const router = Router();
 
@@ -69,6 +70,10 @@ router.get('/me/export', autenticarToken, asyncHandler(async (req, res) => {
 }));
 
 router.delete('/me', autenticarToken, validar(deleteAccountSchema), asyncHandler(async (req, res) => {
+    const usuario = await BD.query('SELECT password_hash FROM users WHERE id = $1', [req.usuario.id_usuario]);
+    if (!usuario.rows[0] || !usuario.rows[0].password_hash || !(await bcrypt.compare(req.body.password, usuario.rows[0].password_hash))) {
+        throw new AppError('Senha incorreta', 401);
+    }
     const documentos = await BD.query('SELECT storage_url FROM documents WHERE user_id = $1', [req.usuario.id_usuario]);
     for (const documento of documentos.rows) {
         const nome = nomeArquivoDaUrl(documento.storage_url);

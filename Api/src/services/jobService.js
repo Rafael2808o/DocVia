@@ -12,6 +12,11 @@ export async function enfileirarJob(type, payload, { maxAttempts = 3, runAfter =
     return resultado.rows[0];
 }
 
+export async function enfileirarJobUnico(type, payload, options) {
+    const existente = await BD.query(`SELECT * FROM jobs WHERE type = $1 AND payload->>'documentId' = $2 AND status IN ('queued', 'processing') ORDER BY created_at DESC LIMIT 1`, [type, String(payload.documentId)]);
+    return existente.rows[0] || enfileirarJob(type, payload, options);
+}
+
 export async function buscarJobPendente() {
     const cliente = await BD.connect();
     try {
@@ -59,6 +64,7 @@ async function falharJob(job, erro) {
           WHERE id = $1`,
         [job.id, tentativas, acabou ? 'failed' : 'queued', esperaMs, String(erro.message || erro).slice(0, 1_000)]
     );
+    if (acabou && job.payload?.documentId) await BD.query(`UPDATE documents SET status = 'failed', error_message = $1, updated_at = NOW() WHERE id = $2 AND status <> 'done'`, ['Não conseguimos processar seu documento. Toque para tentar novamente.', job.payload.documentId]);
 }
 
 export async function recuperarJobsInterrompidos() {

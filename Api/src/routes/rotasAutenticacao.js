@@ -4,9 +4,10 @@ import jwt from 'jsonwebtoken';
 import { BD } from '../../db.js';
 import { validar } from '../middlewares/validar.js';
 import { limitadorAuth, verificarBloqueioLogin, registrarFalhaLogin, registrarSucessoLogin } from '../middlewares/limitadores.js';
-import { registerSchema, loginSchema, refreshSchema } from '../schemas/authSchemas.js';
+import { registerSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema } from '../schemas/authSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 import { criarRefreshToken, consumirRefreshToken, revogarRefreshToken } from '../services/refreshTokenService.js';
+import { criarTokenRedefinicao, consumirTokenRedefinicao, enviarEmailRedefinicao } from '../services/passwordResetService.js';
 import { env } from '../../config/env.js';
 
 const router = Router();
@@ -15,6 +16,9 @@ const SECRET_KEY = env.JWT_SECRET;
 // Access token de vida curta: se vazar, expira rápido.
 // Quem mantém a sessão viva por mais tempo é o refresh token.
 const ACCESS_TOKEN_EXPIRA_EM = '15m';
+// Mantém o tempo de resposta parecido quando o e-mail não existe, reduzindo
+// tentativas de enumeração por medição de tempo.
+const HASH_SENHA_FALSA = '$2b$10$8bYHtj9tYYQdPWCyIfKcL.6fkZgSsFKc4oizmvS8S9zQ8FzvL05Gq';
 
 function gerarAccessToken(usuario) {
     return jwt.sign(
@@ -49,21 +53,21 @@ function gerarAccessToken(usuario) {
 router.post('/register', limitadorAuth, validar(registerSchema), asyncHandler(async (req, res) => {
     const { nome, email, senha } = req.body;
 
-    const existe = await BD.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existe.rows.length > 0) {
-        throw new AppError('Email já cadastrado', 409);
-    }
-
     const senhaHash = await bcrypt.hash(senha, 10);
-
-    const resultado = await BD.query(
-        `INSERT INTO users (name, email, password_hash, auth_provider, plan)
-         VALUES ($1, $2, $3, 'email', 'free')
-         RETURNING id, name, email, plan, created_at`,
-        [nome, email, senhaHash]
-    );
-
-    return res.status(201).json({ message: 'Usuário criado com sucesso', usuario: resultado.rows[0] });
+    try {
+        const resultado = await BD.query(
+            `INSERT INTO users (name, email, password_hash, auth_provider, plan)
+             VALUES ($1, $2, $3, 'email', 'free')
+             RETURNING id, name, email, plan, created_at`,
+            [nome, email, senhaHash]
+        );
+        return res.status(201).json({ message: 'Conta criada com sucesso', usuario: resultado.rows[0] });
+    } catch (erro) {
+        if (erro.code === '23505') {
+            throw new AppError('Não foi possível concluir o cadastro. Tente entrar ou recuperar sua senha.', 409);
+        }
+        throw erro;
+    }
 }));
 
 /**
@@ -99,6 +103,7 @@ router.post('/login', limitadorAuth, validar(loginSchema), verificarBloqueioLogi
     );
 
     if (resultado.rows.length === 0) {
+        await bcrypt.compare(senha, HASH_SENHA_FALSA);
         await registrarFalhaLogin(email);
         throw new AppError('Email ou senha inválidos', 401);
     }
@@ -186,6 +191,24 @@ router.post('/refresh', validar(refreshSchema), asyncHandler(async (req, res) =>
 router.post('/logout', validar(refreshSchema), asyncHandler(async (req, res) => {
     await revogarRefreshToken(req.body.refresh_token);
     return res.status(200).json({ message: 'Logout realizado com sucesso' });
+}));
+
+router.post('/forgot-password', limitadorAuth, validar(forgotPasswordSchema), asyncHandler(async (req, res) => {
+    const usuario = await BD.query('SELECT id FROM users WHERE email = $1', [req.body.email]);
+    if (usuario.rows[0]) {
+        const token = await criarTokenRedefinicao(usuario.rows[0].id);
+        await enviarEmailRedefinicao(req.body.email, token);
+    }
+    return res.status(202).json({ message: 'Se este e-mail estiver cadastrado, você receberá instruções para redefinir a senha.' });
+}));
+
+router.post('/reset-password', validar(resetPasswordSchema), asyncHandler(async (req, res) => {
+    const userId = await consumirTokenRedefinicao(req.body.token);
+    if (!userId) throw new AppError('Link inválido ou expirado', 400);
+    const senhaHash = await bcrypt.hash(req.body.senha, 10);
+    await BD.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [senhaHash, userId]);
+    await BD.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
+    return res.status(200).json({ message: 'Senha atualizada com sucesso. Entre novamente.' });
 }));
 
 export default router;

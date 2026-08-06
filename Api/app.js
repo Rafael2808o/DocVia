@@ -19,7 +19,8 @@ import rotasDocumentos from './src/routes/rotasDocumentos.js';
 import rotasAnalises from './src/routes/rotasAnalises.js';
 import rotasUso from './src/routes/rotasUso.js';
 import { iniciarWorker } from './src/services/jobService.js';
-import { extrairTextoDoDocumento, analisarDocumentoEmSegundoPlano } from './src/services/documentProcessingService.js';
+import { extrairTextoDoDocumento, analisarDocumentoEmSegundoPlano, expirarDocumentosParados } from './src/services/documentPipelineService.js';
+import { garantirSchemaProcessamento } from './src/services/processingSchemaService.js';
 
 const app = express();
 
@@ -67,15 +68,17 @@ export { app };
 
 export async function iniciarServidor() {
     await testarConexao();
+    await garantirSchemaProcessamento();
     const pararWorker = iniciarWorker({
         extract_document_text: extrairTextoDoDocumento,
         analyze_document: analisarDocumentoEmSegundoPlano,
     });
+    const timeoutGuard = setInterval(() => expirarDocumentosParados().catch((err) => logger.error({ err }, 'Falha no timeout guard')), 30_000);
     const servidor = app.listen(env.PORT, () => {
         logger.info(`Servidor rodando em http://localhost:${env.PORT}`);
         logger.info(`Swagger disponível em http://localhost:${env.PORT}/docs`);
     });
-    servidor.on('close', pararWorker);
+    servidor.on('close', () => { pararWorker(); clearInterval(timeoutGuard); });
     return servidor;
 }
 

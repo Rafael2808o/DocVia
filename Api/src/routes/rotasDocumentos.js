@@ -10,7 +10,8 @@ import { salvarArquivo, removerArquivo, nomeArquivoDaUrl } from '../services/sto
 import { analisarDocumentoComIA } from '../services/iaService.js';
 import { parseBoletoInfo } from '../services/boletoService.js';
 import { env } from '../../config/env.js';
-import { enfileirarJob } from '../services/jobService.js';
+import { enfileirarJob, enfileirarJobUnico } from '../services/jobService.js';
+import { logger } from '../../config/logger.js';
 
 const router = Router();
 
@@ -64,13 +65,14 @@ router.post(
         const arquivoSalvo = await salvarArquivo(req.file);
         try {
             const resultado = await BD.query(
-                `INSERT INTO documents (user_id, original_name, document_type, storage_url, mime_type, status)
-                 VALUES ($1, $2, $3, $4, $5, 'pending')
+                `INSERT INTO documents (user_id, original_name, document_type, storage_url, storage_path, mime_type, status, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'queued', NOW())
              RETURNING *`,
-                [req.usuario.id_usuario, req.file.originalname, document_type, arquivoSalvo.url, req.file.mimetype]
+                [req.usuario.id_usuario, req.file.originalname, document_type, arquivoSalvo.url, arquivoSalvo.caminho, req.file.mimetype]
             );
 
-            const job = await enfileirarJob('extract_document_text', { documentId: resultado.rows[0].id });
+            logger.info({ documentId: resultado.rows[0].id, storagePath: arquivoSalvo.caminho, storageUrl: arquivoSalvo.url, mime: req.file.mimetype }, 'Upload de documento persistido');
+            const job = await enfileirarJobUnico('extract_document_text', { documentId: resultado.rows[0].id, userId: req.usuario.id_usuario });
 
             return res.status(202).json({
                 message: 'Documento enviado e aguardando extração de texto',
@@ -139,6 +141,13 @@ router.get('/jobs/:jobId', autenticarToken, validarUuidParam('jobId'), asyncHand
     );
     if (!resultado.rows[0]) throw new AppError('Job não encontrado', 404);
     return res.status(200).json({ job: resultado.rows[0] });
+}));
+
+router.post('/:id/retry', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
+    const resultado = await BD.query(`UPDATE documents SET status = 'queued', error_message = NULL, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'failed' RETURNING id`, [req.params.id, req.usuario.id_usuario]);
+    if (!resultado.rows[0]) throw new AppError('Este documento não pode ser reprocessado', 409);
+    const job = await enfileirarJobUnico('extract_document_text', { documentId: req.params.id, userId: req.usuario.id_usuario });
+    return res.status(202).json({ message: 'Documento reenfileirado', job: { id: job.id, status: job.status } });
 }));
 
 /**
