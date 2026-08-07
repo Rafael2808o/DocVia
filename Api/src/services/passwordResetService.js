@@ -12,8 +12,8 @@ export async function criarTokenRedefinicao(userId) {
     return token;
 }
 
-export async function consumirTokenRedefinicao(token) {
-    const resultado = await BD.query(
+export async function consumirTokenRedefinicao(token, cliente = BD) {
+    const resultado = await cliente.query(
         `UPDATE password_reset_tokens SET used_at = NOW()
          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
          RETURNING user_id`, [hash(token)]

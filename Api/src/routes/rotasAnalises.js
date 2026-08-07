@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
 import { validarUuidParam } from '../middlewares/validar.js';
-import { enfileirarJob } from '../services/jobService.js';
+import { enfileirarJobUnico } from '../services/jobService.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 
 const router = Router();
@@ -38,7 +38,7 @@ router.post('/:id/analyze', autenticarToken, validarUuidParam(), asyncHandler(as
     if (!doc.extracted_text?.trim()) {
         throw new AppError('O documento ainda não possui texto extraído para análise', 422);
     }
-    const job = await enfileirarJob('analyze_document', { documentId: doc.id, userId: req.usuario.id_usuario });
+    const job = await enfileirarJobUnico('analyze_document', { documentId: doc.id, userId: req.usuario.id_usuario });
     return res.status(202).json({ message: 'Análise enfileirada', job: { id: job.id, status: job.status } });
 }));
 

@@ -2,7 +2,9 @@
   "expo": {
     "name": "DocVia",
     "slug": "DocVia",
+    "description": "Organize documentos, identifique prazos e entenda pontos importantes com apoio de inteligência artificial.",
     "version": "1.0.0",
+    "scheme": "docvia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -10,21 +12,60 @@
       "supportsTablet": true
     },
     "android": {
+      "allowBackup": false,
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#08080F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "br.com.docvia.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store",
-      ["expo-image-picker", { "photosPermission": "Permita o acesso para selecionar documentos no DocVia.", "cameraPermission": "Permita o acesso à câmera para digitalizar documentos no DocVia." }],
-      ["expo-notifications", { "icon": "./assets/icon.png", "color": "#146C94" }],
-      ["expo-local-authentication", { "faceIDPermission": "Permita a biometria para proteger o DocVia." }]
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#08080F",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#08080F",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Permita o acesso à câmera para digitalizar documentos no DocVia.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#146C94"
+        }
+      ]
     ]
   }
 }

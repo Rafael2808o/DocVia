@@ -9,6 +9,7 @@ import { AppError, asyncHandler } from '../../utils/erros.js';
 import { criarRefreshToken, consumirRefreshToken, revogarRefreshToken } from '../services/refreshTokenService.js';
 import { criarTokenRedefinicao, consumirTokenRedefinicao, enviarEmailRedefinicao } from '../services/passwordResetService.js';
 import { env } from '../../config/env.js';
+import { logger } from '../../config/logger.js';
 
 const router = Router();
 const SECRET_KEY = env.JWT_SECRET;
@@ -196,18 +197,34 @@ router.post('/logout', validar(refreshSchema), asyncHandler(async (req, res) => 
 router.post('/forgot-password', limitadorAuth, validar(forgotPasswordSchema), asyncHandler(async (req, res) => {
     const usuario = await BD.query('SELECT id FROM users WHERE email = $1', [req.body.email]);
     if (usuario.rows[0]) {
-        const token = await criarTokenRedefinicao(usuario.rows[0].id);
-        await enviarEmailRedefinicao(req.body.email, token);
+        try {
+            const token = await criarTokenRedefinicao(usuario.rows[0].id);
+            await enviarEmailRedefinicao(req.body.email, token);
+        } catch (erro) {
+            // A resposta permanece idêntica para e-mails existentes e inexistentes,
+            // inclusive quando o provedor falha, evitando enumeração de contas.
+            logger.error({ err: erro, userId: usuario.rows[0].id }, 'Falha ao enviar recuperação de senha');
+        }
     }
     return res.status(202).json({ message: 'Se este e-mail estiver cadastrado, você receberá instruções para redefinir a senha.' });
 }));
 
 router.post('/reset-password', validar(resetPasswordSchema), asyncHandler(async (req, res) => {
-    const userId = await consumirTokenRedefinicao(req.body.token);
-    if (!userId) throw new AppError('Link inválido ou expirado', 400);
     const senhaHash = await bcrypt.hash(req.body.senha, 10);
-    await BD.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [senhaHash, userId]);
-    await BD.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
+    const cliente = await BD.connect();
+    try {
+        await cliente.query('BEGIN');
+        const userId = await consumirTokenRedefinicao(req.body.token, cliente);
+        if (!userId) throw new AppError('Link inválido ou expirado', 400);
+        await cliente.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [senhaHash, userId]);
+        await cliente.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
+        await cliente.query('COMMIT');
+    } catch (erro) {
+        await cliente.query('ROLLBACK').catch(() => undefined);
+        throw erro;
+    } finally {
+        cliente.release();
+    }
     return res.status(200).json({ message: 'Senha atualizada com sucesso. Entre novamente.' });
 }));
 

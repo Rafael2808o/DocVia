@@ -27,10 +27,10 @@ test('rota protegida exige token', async () => {
 
 test('muitas tentativas de login retornam 429', async () => {
     for (let i = 0; i < 8; i += 1) {
-        await request(app).post('/auth/login').send({ email: 'alvo@example.com', senha: 'senhaerrada' });
+        await request(app).post('/auth/login').send({});
     }
 
-    const resposta = await request(app).post('/auth/login').send({ email: 'alvo@example.com', senha: 'senhaerrada' });
+    const resposta = await request(app).post('/auth/login').send({});
 
     assert.equal(resposta.status, 429);
     assert.match(resposta.body.message, /Muitas tentativas/);
@@ -45,6 +45,23 @@ test('rota desconhecida retorna 404', async () => {
     const resposta = await request(app).get('/rota-inexistente');
     assert.equal(resposta.status, 404);
     assert.match(resposta.body.message, /Rota GET/);
+});
+
+test('liveness não depende do banco', async () => {
+    const resposta = await request(app).get('/health/live');
+    assert.equal(resposta.status, 200);
+    assert.equal(resposta.body.status, 'ok');
+});
+
+test('executor interno rejeita requisições sem o segredo', async () => {
+    const resposta = await request(app).post('/internal/jobs/00000000-0000-4000-8000-000000000000/execute');
+    assert.equal(resposta.status, 401);
+});
+
+test('checkout fica indisponível na versão gratuita', async () => {
+    const resposta = await request(app).post('/billing/checkout').send({});
+    assert.equal(resposta.status, 404);
+    assert.match(resposta.body.message, /não estão disponíveis/i);
 });
 
 test('token só é aceito no esquema Bearer', async () => {

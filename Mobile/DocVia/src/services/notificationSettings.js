@@ -1,9 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { deadlineDate, deadlineDescription } from '../utils/deadlines';
 
 const KEY = 'docvia.notification-settings';
-const defaults = { alertsEnabled: true, quietMode: false };
+const defaults = { alertsEnabled: false, quietMode: false };
 const native = Platform.OS !== 'web';
 const expoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
 
@@ -14,9 +15,19 @@ function notificationsModule() {
 
 export function supportsDeviceNotifications() { return Boolean(notificationsModule()); }
 
+async function ensureDeadlineChannel(Notifications) {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('deadlines', {
+    name: 'Prazos de documentos',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    vibrationPattern: [0, 250, 250, 250],
+  });
+}
+
 export async function requestDeviceNotificationPermission() {
   const Notifications = notificationsModule();
   if (!Notifications) return { supported: false, granted: false };
+  await ensureDeadlineChannel(Notifications);
   const permission = await Notifications.requestPermissionsAsync();
   return { supported: true, granted: permission.granted };
 }
@@ -39,14 +50,6 @@ function localDate(value) {
   return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
 }
 
-function deadlineDate(item) {
-  const raw = typeof item === 'string' ? item : item?.due_date || item?.data || item?.description || item?.descricao;
-  const iso = String(raw || '').match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const br = String(raw || '').match(/([0-3]?\d)[/-]([0-1]?\d)[/-](\d{4})/);
-  return br ? `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}` : null;
-}
-
 function triggerFor(dueDate, daysBefore, quietMode) {
   const trigger = localDate(dueDate);
   trigger.setDate(trigger.getDate() - daysBefore);
@@ -57,6 +60,7 @@ function triggerFor(dueDate, daysBefore, quietMode) {
 export async function scheduleDeadlineAlerts(documents, settings) {
   const Notifications = notificationsModule();
   if (!Notifications) return 0;
+  await ensureDeadlineChannel(Notifications);
   await Notifications.cancelAllScheduledNotificationsAsync();
   if (!settings.alertsEnabled) return 0;
   const permission = await Notifications.getPermissionsAsync();
@@ -67,11 +71,11 @@ export async function scheduleDeadlineAlerts(documents, settings) {
     for (const item of document.analysis_deadlines || []) {
       const dueDate = deadlineDate(item);
       if (!dueDate) continue;
-      const description = typeof item === 'string' ? item : item.description || item.descricao || 'Prazo identificado';
+      const description = deadlineDescription(item);
       for (const daysBefore of [7, 3, 1]) {
         const trigger = triggerFor(dueDate, daysBefore, settings.quietMode);
         if (trigger <= now) continue;
-        await Notifications.scheduleNotificationAsync({ content: { title: 'Prazo DocVia', body: `${description} vence em ${daysBefore} dia${daysBefore > 1 ? 's' : ''}.`, data: { documentId: document.id, dueDate } }, trigger });
+        await Notifications.scheduleNotificationAsync({ content: { title: 'Prazo DocVia', body: `${description} vence em ${daysBefore} dia${daysBefore > 1 ? 's' : ''}.`, data: { documentId: document.id, dueDate }, ...(Platform.OS === 'android' ? { channelId: 'deadlines' } : {}) }, trigger });
         created += 1;
       }
     }
@@ -82,10 +86,11 @@ export async function scheduleDeadlineAlerts(documents, settings) {
 export async function scheduleSingleDeadlineReminder(dueDate, settings) {
   const Notifications = notificationsModule();
   if (!settings.alertsEnabled || !Notifications) return false;
+  await ensureDeadlineChannel(Notifications);
   const permission = await Notifications.getPermissionsAsync();
   if (!permission.granted) return false;
   const trigger = triggerFor(dueDate, 1, settings.quietMode);
   if (trigger <= new Date()) return false;
-  await Notifications.scheduleNotificationAsync({ content: { title: 'Prazo DocVia', body: 'Você tem um prazo chegando amanhã.' }, trigger });
+  await Notifications.scheduleNotificationAsync({ content: { title: 'Prazo DocVia', body: 'Você tem um prazo chegando amanhã.', ...(Platform.OS === 'android' ? { channelId: 'deadlines' } : {}) }, trigger });
   return true;
 }

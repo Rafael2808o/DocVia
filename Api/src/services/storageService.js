@@ -1,6 +1,7 @@
 import { mkdir, unlink, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/erros.js';
 
@@ -10,6 +11,22 @@ const MIME_EXTENSOES = {
     'image/jpg': '.jpg',
     'image/png': '.png',
 };
+
+let clienteR2;
+
+function obterClienteR2() {
+    if (!clienteR2) {
+        clienteR2 = new S3Client({
+            region: 'auto',
+            endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+            credentials: {
+                accessKeyId: env.R2_ACCESS_KEY_ID,
+                secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+            },
+        });
+    }
+    return clienteR2;
+}
 
 function arquivoCorrespondeAoMime(file) {
     const buffer = file.buffer;
@@ -27,8 +44,48 @@ function arquivoCorrespondeAoMime(file) {
     return false;
 }
 
-function nomeSeguro(nome) {
-    return path.basename(nome).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180);
+function criarChave(extensao) {
+    const agora = new Date();
+    return `documents/${agora.getUTCFullYear()}/${String(agora.getUTCMonth() + 1).padStart(2, '0')}/${crypto.randomUUID()}${extensao}`;
+}
+
+function chaveR2DaReferencia(referencia) {
+    if (!referencia) return null;
+    if (!String(referencia).startsWith('r2://')) return null;
+    try {
+        const url = new URL(referencia);
+        if (url.hostname !== env.R2_BUCKET) return null;
+        return decodeURIComponent(url.pathname.replace(/^\/+/, '')) || null;
+    } catch {
+        return null;
+    }
+}
+
+function caminhoLocalSeguro(referencia) {
+    if (!referencia) throw new AppError('Referência de arquivo inválida', 400);
+    const raiz = path.resolve(env.STORAGE_DIR);
+    const valor = String(referencia);
+    const prefixoPublico = `/${String(env.STORAGE_PUBLIC_URL).replace(/^\/+|\/+$/g, '')}/`;
+    let alvo;
+    if (valor.startsWith(prefixoPublico) || /^https?:\/\//i.test(valor)) {
+        const nome = nomeArquivoDaUrl(valor);
+        alvo = path.resolve(raiz, nome || 'arquivo-invalido');
+    } else if (path.isAbsolute(valor)) {
+        alvo = path.resolve(valor);
+    } else {
+        const partes = valor.split(/[\\/]+/);
+        if (partes.includes('..')) throw new AppError('Referência de arquivo inválida', 400);
+        const caminhoRelativoAoProcesso = path.resolve(valor);
+        if (caminhoRelativoAoProcesso.startsWith(`${raiz}${path.sep}`)) {
+            alvo = caminhoRelativoAoProcesso;
+        } else {
+            alvo = path.resolve(raiz, valor);
+        }
+    }
+    if (alvo === raiz || !alvo.startsWith(`${raiz}${path.sep}`)) {
+        throw new AppError('Referência de arquivo inválida', 400);
+    }
+    return alvo;
 }
 
 export async function salvarArquivo(file) {
@@ -38,35 +95,68 @@ export async function salvarArquivo(file) {
         throw new AppError('O conteúdo do arquivo não corresponde ao tipo informado', 400);
     }
 
-    await mkdir(env.STORAGE_DIR, { recursive: true });
-    const nome = `${crypto.randomUUID()}-${nomeSeguro(file.originalname || `documento${extensao}`)}`;
-    const caminho = path.join(env.STORAGE_DIR, nome);
-    await writeFile(caminho, file.buffer, { flag: 'wx' });
+    const chave = criarChave(extensao);
+    if (env.STORAGE_PROVIDER === 'r2') {
+        await obterClienteR2().send(new PutObjectCommand({
+            Bucket: env.R2_BUCKET,
+            Key: chave,
+            Body: file.buffer,
+            ContentType: file.mimetype,
+            CacheControl: 'private, no-store',
+            Metadata: { source: 'docvia-api' },
+        }));
+        return { caminho: chave, url: `r2://${env.R2_BUCKET}/${chave}` };
+    }
 
-    return { caminho, url: `${env.STORAGE_PUBLIC_URL}/${encodeURIComponent(nome)}` };
+    await mkdir(env.STORAGE_DIR, { recursive: true });
+    const caminho = path.resolve(env.STORAGE_DIR, chave.replaceAll('/', path.sep));
+    await mkdir(path.dirname(caminho), { recursive: true });
+    await writeFile(caminho, file.buffer, { flag: 'wx' });
+    return { caminho, url: `${env.STORAGE_PUBLIC_URL}/${chave}` };
 }
 
-export async function removerArquivo(caminho) {
-    if (!caminho) return;
-    await unlink(caminho).catch(() => undefined);
+export async function removerArquivo(referencia) {
+    if (!referencia || referencia === 'text://manual-entry') return;
+    const chaveR2 = chaveR2DaReferencia(referencia) || (env.STORAGE_PROVIDER === 'r2' && !path.isAbsolute(referencia) ? referencia : null);
+    if (chaveR2) {
+        await obterClienteR2().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: chaveR2 }));
+        return;
+    }
+    const alvo = caminhoLocalSeguro(referencia);
+    await unlink(alvo).catch((erro) => {
+        if (erro.code !== 'ENOENT') throw erro;
+    });
 }
 
 export function nomeArquivoDaUrl(url) {
+    const chaveR2 = chaveR2DaReferencia(url);
+    if (chaveR2) return chaveR2;
     try {
-        const nome = path.basename(new URL(url, 'http://local').pathname);
-        return nome || null;
+        const pathname = decodeURIComponent(new URL(url, 'http://local').pathname);
+        const prefixo = `/${String(env.STORAGE_PUBLIC_URL).replace(/^\/+|\/+$/g, '')}/`;
+        const nome = (pathname.startsWith(prefixo) ? pathname.slice(prefixo.length) : pathname.replace(/^\/+/, ''));
+        return nome && nome !== '.' && nome !== '..' ? nome : null;
     } catch {
         return null;
     }
 }
 
 export async function lerArquivoPorUrl(url) {
-    const nome = nomeArquivoDaUrl(url);
-    if (!nome || nome === '.' || nome === '..') {
-        throw new AppError('Arquivo do documento não encontrado', 404);
+    const chaveR2 = chaveR2DaReferencia(url);
+    if (chaveR2) {
+        try {
+            const resposta = await obterClienteR2().send(new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: chaveR2 }));
+            if (!resposta.Body) throw new AppError('Arquivo do documento não encontrado', 404);
+            return Buffer.from(await resposta.Body.transformToByteArray());
+        } catch (erro) {
+            if (erro.name === 'NoSuchKey' || erro.$metadata?.httpStatusCode === 404) throw new AppError('Arquivo do documento não encontrado', 404);
+            throw erro;
+        }
     }
+
     try {
-        return await readFile(path.join(env.STORAGE_DIR, nome));
+        const caminho = caminhoLocalSeguro(url);
+        return await readFile(caminho);
     } catch (erro) {
         if (erro.code === 'ENOENT') throw new AppError('Arquivo do documento não encontrado', 404);
         throw erro;

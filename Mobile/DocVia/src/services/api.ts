@@ -56,6 +56,29 @@ async function request(path: string, options: RequestInit = {}, retry = true): P
   } finally { clearTimeout(timeout); }
 }
 
+async function requestFile(path: string, retry = true): Promise<Response> {
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const current = getSession();
+    const headers = new Headers();
+    if (current?.accessToken) headers.set('Authorization', `Bearer ${current.accessToken}`);
+    const response = await fetch(`${API_URL}${path}`, { headers, signal: controller.signal });
+    if ((response.status === 401 || response.status === 403) && retry && current?.refreshToken) {
+      await refreshAccess(current);
+      return requestFile(path, false);
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw httpError(data, response.status);
+    }
+    return response;
+  } catch (error: any) {
+    if (error.name === 'AbortError') throw new Error('A conexão demorou demais. Tente novamente.');
+    if (error instanceof TypeError) throw new Error('Você parece estar offline. Verifique sua conexão.');
+    throw error;
+  } finally { clearTimeout(timeout); }
+}
+
 export const authApi = {
   login: (email: string, senha: string) => request('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, senha }) }),
   register: (nome: string, email: string, senha: string) => request('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome, email, senha }) }),
@@ -65,7 +88,7 @@ export const authApi = {
 };
 
 export const documentsApi = {
-  list: () => request('/documents'), deadlines: () => request('/documents/deadlines/upcoming?days=30'), detail: (id: string) => request(`/documents/${id}`), job: (id: string) => request(`/documents/jobs/${id}`), boleto: (id: string) => request(`/documents/${id}/boleto`), retry: (id: string) => request(`/documents/${id}/retry`, { method: 'POST' }), remove: (id: string) => request(`/documents/${id}`, { method: 'DELETE' }), upload: (file: any, document_type: string) => { const body = new FormData(); body.append('arquivo', file); body.append('document_type', document_type); return request('/documents', { method: 'POST', body }); }, uploadText: (text: string, document_type: string) => request('/documents/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, document_type }) }),
+  list: () => request('/documents'), deadlines: () => request('/documents/deadlines/upcoming?days=30'), detail: (id: string) => request(`/documents/${id}`), file: (id: string) => requestFile(`/documents/${id}/file`), job: (id: string) => request(`/documents/jobs/${id}`), boleto: (id: string) => request(`/documents/${id}/boleto`), retry: (id: string) => request(`/documents/${id}/retry`, { method: 'POST' }), remove: (id: string) => request(`/documents/${id}`, { method: 'DELETE' }), upload: (file: any, document_type: string) => { const body = new FormData(); body.append('arquivo', file); body.append('document_type', document_type); return request('/documents', { method: 'POST', body }); }, uploadText: (text: string, document_type: string) => request('/documents/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, document_type }) }),
 };
 
 export const userApi = {

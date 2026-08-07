@@ -18,8 +18,8 @@ export async function analisarDocumentoComIA(texto, documentType = 'outro') {
     let content; let raw;
     if (env.AI_PROVIDER === 'gemini') {
         if (!temGeminiConfigurada()) throw new AppError('Serviço Gemini não configurado', 503);
-        const url = new URL(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`); url.searchParams.set('key', env.GEMINI_API_KEY);
-        raw = await call(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: schemaPrompt }] }, contents: [{ role: 'user', parts: [{ text: `Tipo: ${documentType}\n${texto}` }] }], generationConfig: { responseMimeType: 'application/json' } }) }); content = raw.candidates?.[0]?.content?.parts?.[0]?.text;
+        const url = new URL(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`);
+        raw = await call(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ systemInstruction: { parts: [{ text: schemaPrompt }] }, contents: [{ role: 'user', parts: [{ text: `Tipo: ${documentType}\n${texto}` }] }], generationConfig: { responseMimeType: 'application/json' } }) }); content = raw.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
         if (!temOpenAiConfigurada()) throw new AppError('Serviço OpenAI não configurado', 503);
         raw = await call('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: schemaPrompt }, { role: 'user', content: `Tipo: ${documentType}\n${texto}` }], response_format: { type: 'json_object' } }) }); content = raw.choices?.[0]?.message?.content;

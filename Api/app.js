@@ -8,7 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 import { logger } from './config/logger.js';
 import { env, origensCors } from './config/env.js';
-import { testarConexao } from './db.js';
+import { BD, testarConexao } from './db.js';
 import { limitadorGeral } from './src/middlewares/limitadores.js';
 import { tratarErros, rotaNaoEncontrada } from './src/middlewares/tratarErros.js';
 
@@ -18,9 +18,10 @@ import rotasBilling from './src/routes/rotasBilling.js';
 import rotasDocumentos from './src/routes/rotasDocumentos.js';
 import rotasAnalises from './src/routes/rotasAnalises.js';
 import rotasUso from './src/routes/rotasUso.js';
+import rotasInternas from './src/routes/rotasInternas.js';
 import { iniciarWorker } from './src/services/jobService.js';
 import { extrairTextoDoDocumento, analisarDocumentoEmSegundoPlano, expirarDocumentosParados } from './src/services/documentPipelineService.js';
-import { garantirSchemaProcessamento } from './src/services/processingSchemaService.js';
+import { garantirSchemaProcessamento, verificarSchemaProcessamento } from './src/services/processingSchemaService.js';
 
 const app = express();
 
@@ -42,10 +43,21 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
+app.get('/health/live', (req, res) => res.status(200).json({ status: 'ok', version: env.API_VERSION }));
+app.get('/health/ready', async (req, res) => {
+    try {
+        await BD.query('SELECT 1');
+        return res.status(200).json({ status: 'ready', version: env.API_VERSION });
+    } catch {
+        return res.status(503).json({ status: 'unavailable' });
+    }
+});
+
 // Loga cada requisição (método, rota, status, tempo de resposta)
 app.use(pinoHttp({ logger }));
 
 // Limite geral de requisições por IP - protege contra abuso/DoS simples
+app.use('/internal', rotasInternas);
 app.use(limitadorGeral);
 
 // Documentação interativa em http://localhost:3000/docs
@@ -68,17 +80,23 @@ export { app };
 
 export async function iniciarServidor() {
     await testarConexao();
-    await garantirSchemaProcessamento();
-    const pararWorker = iniciarWorker({
+    if (env.AUTO_MIGRATE) await garantirSchemaProcessamento();
+    else await verificarSchemaProcessamento();
+    const pararWorker = env.JOB_MODE === 'worker' ? iniciarWorker({
         extract_document_text: extrairTextoDoDocumento,
         analyze_document: analisarDocumentoEmSegundoPlano,
-    });
-    const timeoutGuard = setInterval(() => expirarDocumentosParados().catch((err) => logger.error({ err }, 'Falha no timeout guard')), 30_000);
+    }) : () => undefined;
+    const timeoutGuard = env.JOB_MODE === 'worker'
+        ? setInterval(() => expirarDocumentosParados().catch((err) => logger.error({ err }, 'Falha no timeout guard')), 30_000)
+        : null;
     const servidor = app.listen(env.PORT, () => {
         logger.info(`Servidor rodando em http://localhost:${env.PORT}`);
         logger.info(`Swagger disponível em http://localhost:${env.PORT}/docs`);
     });
-    servidor.on('close', () => { pararWorker(); clearInterval(timeoutGuard); });
+    const encerrar = () => servidor.close(() => BD.end().finally(() => process.exit(0)));
+    process.once('SIGTERM', encerrar);
+    process.once('SIGINT', encerrar);
+    servidor.on('close', () => { pararWorker(); if (timeoutGuard) clearInterval(timeoutGuard); });
     return servidor;
 }
 

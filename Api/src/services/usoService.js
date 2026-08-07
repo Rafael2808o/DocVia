@@ -1,4 +1,5 @@
 import { BD } from '../../db.js';
+import { env } from '../../config/env.js';
 
 const LIMITES_POR_PLANO = {
     free: 5,
@@ -29,6 +30,16 @@ export async function registrarUso(userId, acao) {
 export async function reservarUsoNaTransacao(cliente, userId, plano) {
     const limite = LIMITES_POR_PLANO[plano] ?? LIMITES_POR_PLANO.free;
 
+    // Impede que cadastros automatizados somem cotas individuais e gerem uma
+    // conta de IA sem limite. Todas as reservas seguem a mesma ordem de travas.
+    await cliente.query("SELECT pg_advisory_xact_lock(hashtextextended('docvia:ai:global', 0))");
+    const usoGlobal = await cliente.query(
+        `SELECT COUNT(*) FROM usage_logs
+         WHERE action = 'analysis_created'
+           AND created_at >= NOW() - INTERVAL '1 day'`
+    );
+    if (parseInt(usoGlobal.rows[0].count, 10) >= env.AI_GLOBAL_DAILY_LIMIT) return null;
+
     await cliente.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [userId]);
     const resultado = await cliente.query(
         `SELECT COUNT(*) FROM usage_logs
@@ -39,13 +50,13 @@ export async function reservarUsoNaTransacao(cliente, userId, plano) {
     );
 
     const usoHoje = parseInt(resultado.rows[0].count, 10);
-    if (usoHoje >= limite) return false;
+    if (usoHoje >= limite) return null;
 
-    await cliente.query(
-        'INSERT INTO usage_logs (user_id, action) VALUES ($1, $2)',
+    const reserva = await cliente.query(
+        'INSERT INTO usage_logs (user_id, action) VALUES ($1, $2) RETURNING id',
         [userId, 'analysis_created']
     );
-    return true;
+    return reserva.rows[0]?.id ?? null;
 }
 
 export { LIMITES_POR_PLANO };

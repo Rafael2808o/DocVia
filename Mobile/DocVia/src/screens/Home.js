@@ -7,6 +7,7 @@ import { ErrorState, Skeleton } from '../components/ui';
 import NotificationCenter from '../components/NotificationCenter';
 import { documentsApi, userApi } from '../services/api';
 import { common } from '../theme';
+import { localDate } from '../utils/deadlines';
 import { date, typeLabel } from './shared';
 
 const violet = '#5D43F2';
@@ -23,7 +24,7 @@ function documentStyle(document) {
 
 function deadlineText(deadline) {
   const value = deadline?.date || deadline?.due_date || deadline?.deadline || deadline?.data;
-  const parsed = value ? new Date(value) : null;
+  const parsed = value ? localDate(value) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) return deadline ? 'Em breve' : 'Sem prazos';
   return `${parsed.getDate()} ${parsed.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}`;
 }
@@ -42,16 +43,18 @@ function EmptyRecent({ onPress }) {
 }
 
 export default function Home({ user, navigate, openDocument }) {
-  const [data, setData] = useState(); const [error, setError] = useState('');
+  const [data, setData] = useState(); const [error, setError] = useState(''); const [refreshing, setRefreshing] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const load = useCallback(async () => { try { setError(''); const [usage, deadlines, documents] = await Promise.all([userApi.usage(), documentsApi.deadlines(), documentsApi.list()]); setData({ usage, deadlines: deadlines.deadlines || [], documents }); } catch (nextError) { setError(nextError.message); } }, []);
   useEffect(() => { load(); }, [load]);
-  if (error) return <ScrollView style={common.screen}><ErrorState error={error} retry={load} /></ScrollView>;
+  const refresh = async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } };
+  if (error && !data) return <ScrollView style={common.screen}><ErrorState error={error} retry={load} /></ScrollView>;
   if (!data) return <ScrollView contentContainerStyle={styles.loading}><Skeleton height={72} /><Skeleton height={136} /><Skeleton height={126} /><Skeleton height={210} /></ScrollView>;
   const name = user?.name?.trim().split(/\s+/)[0] || 'você'; const nearest = data.deadlines[0];
-  return <ScrollView style={common.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={violet} />}>
+  return <ScrollView style={common.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={violet} />}>
+    {error ? <ErrorState error={error} retry={load} /> : null}
     <View style={styles.header}><View><Text style={styles.welcome}>Bem-vindo de volta</Text><Text style={styles.greeting}>Olá, {name} <Text style={styles.hand}>👋</Text></Text></View><Pressable accessibilityRole="button" accessibilityLabel="Abrir notificações" onPress={() => setNotificationsOpen(true)} style={({ pressed }) => [styles.notification, pressed && styles.notificationPressed]}><Bell size={20} color="#A4A6B2" strokeWidth={1.8} /></Pressable></View>
-    <Pressable accessibilityRole="button" onPress={() => navigate('upload')} style={({ pressed }) => [styles.analyze, pressed && styles.analyzePressed]}><LinearGradient colors={['#3F28C7', '#6337E5', '#9145FA']} locations={[0, .54, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.analyzeGradient}><Sparkles size={24} color="#DDD8FF" strokeWidth={1.8} /><View style={styles.uploadCircle}><Upload size={17} color="#FFFFFF" strokeWidth={2} /></View><Text style={styles.analyzeTitle}>Analisar novo documento</Text><Text style={styles.analyzeText}>PDF, JPG ou PNG · até 10 MB · resultado em segundos</Text></LinearGradient></Pressable>
+    <Pressable accessibilityRole="button" onPress={() => navigate('upload')} style={({ pressed }) => [styles.analyze, pressed && styles.analyzePressed]}><LinearGradient colors={['#3F28C7', '#6337E5', '#9145FA']} locations={[0, .54, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.analyzeGradient}><Sparkles size={24} color="#DDD8FF" strokeWidth={1.8} /><View style={styles.uploadCircle}><Upload size={17} color="#FFFFFF" strokeWidth={2} /></View><Text style={styles.analyzeTitle}>Analisar novo documento</Text><Text style={styles.analyzeText}>PDF, JPG ou PNG · até 10 MB · processamento em segundo plano</Text></LinearGradient></Pressable>
     <View style={styles.metrics}><Metric Icon={CalendarDays} iconColor="#8B80FF" label="PRÓXIMO PRAZO" value={deadlineText(nearest)} hint={nearest?.description || 'Nenhum prazo próximo'} /><Metric Icon={Sparkles} iconColor="#24D6AF" label="USO DISPONÍVEL" value={`${data.usage.restante}`} hint="análises restantes hoje" /></View>
     <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Recentes</Text><Pressable accessibilityRole="button" onPress={() => navigate('documents')} hitSlop={10}><Text style={styles.link}>Ver todos</Text></Pressable></View>
     {data.documents.length ? <View style={styles.documents}>{data.documents.slice(0, 3).map((document) => <RecentDocument key={document.id} document={document} onPress={() => openDocument(document.id)} />)}</View> : <EmptyRecent onPress={() => navigate('upload')} />}

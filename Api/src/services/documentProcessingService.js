@@ -38,7 +38,7 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
         const usuario = await cliente.query('SELECT plan FROM users WHERE id = $1 FOR UPDATE', [userId]);
         const plano = usuario.rows[0]?.plan ?? 'free';
         const podeUsar = await reservarUsoNaTransacao(cliente, userId, plano);
-        if (!podeUsar) throw new AppError('Limite diário de análises atingido. Faça upgrade para o plano premium.', 429);
+        if (!podeUsar) throw new AppError('Limite diário de análises atingido. Tente novamente após a renovação da cota.', 429);
 
         await cliente.query('UPDATE documents SET status = $1 WHERE id = $2', ['processing', documentId]);
         const analise = await cliente.query(

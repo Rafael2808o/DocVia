@@ -25,10 +25,7 @@ export async function extrairTextoDoDocumento({ documentId }) {
         if (!texto?.trim()) throw new AppError('Não foi possível extrair texto deste arquivo. Verifique se a imagem está legível e tente novamente.', 422);
         await BD.query(`UPDATE documents SET extracted_text = $1, status = 'extracted', error_message = NULL, updated_at = NOW() WHERE id = $2`, [texto, documentId]);
         await enfileirarJobUnico('analyze_document', { documentId, userId: documento.user_id });
-    } catch (erro) {
-        await setState(documentId, 'failed', String(erro.message || FAIL_MESSAGE).slice(0, 500));
-        throw erro;
-    }
+    } catch (erro) { throw erro; }
 }
 
 export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
@@ -38,23 +35,42 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
     if (documento.status === 'done') return;
     if (!documento.extracted_text?.trim()) throw new AppError('O documento ainda não possui texto extraído para análise', 422);
     await setState(documentId, 'analyzing');
+    let usageReservationId;
     try {
+        const quotaClient = await BD.connect();
+        try {
+            await quotaClient.query('BEGIN');
+            const usuario = await quotaClient.query('SELECT plan FROM users WHERE id = $1 FOR UPDATE', [userId]);
+            if (!usuario.rows[0]) throw new AppError('Usuário não encontrado', 404);
+            usageReservationId = await reservarUsoNaTransacao(quotaClient, userId, usuario.rows[0].plan ?? 'free');
+            if (!usageReservationId) throw new AppError('Limite diário de análises atingido. Tente novamente após a renovação da cota.', 429);
+            await quotaClient.query('COMMIT');
+        } catch (erro) {
+            await quotaClient.query('ROLLBACK').catch(() => undefined);
+            throw erro;
+        } finally {
+            quotaClient.release();
+        }
+
         const resultadoIA = await analisarDocumentoComIA(documento.extracted_text, documento.document_type);
         const generatedTitle = String(resultadoIA.title || resultadoIA.summary || '').split(/[.!?]/)[0].trim().slice(0, 60);
         const cliente = await BD.connect();
         try {
             await cliente.query('BEGIN');
-            const usuario = await cliente.query('SELECT plan FROM users WHERE id = $1 FOR UPDATE', [userId]);
-            if (!await reservarUsoNaTransacao(cliente, userId, usuario.rows[0]?.plan ?? 'free')) throw new AppError('Limite diário de análises atingido. Faça upgrade para o plano premium.', 429);
-            await cliente.query(`INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response) VALUES ($1, $2, $3, $4, $5, $6)`, [documentId, resultadoIA.summary, JSON.stringify(resultadoIA.deadlines), JSON.stringify(resultadoIA.costs), JSON.stringify(resultadoIA.warnings), JSON.stringify({ provider_response: resultadoIA.raw, action_items: resultadoIA.action_items, evidence: resultadoIA.evidence })]);
+            await cliente.query(`INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response) VALUES ($1, $2, $3, $4, $5, $6)`, [documentId, resultadoIA.summary, JSON.stringify(resultadoIA.deadlines), JSON.stringify(resultadoIA.costs), JSON.stringify(resultadoIA.warnings), JSON.stringify({ provider: resultadoIA.provider, action_items: resultadoIA.action_items, evidence: resultadoIA.evidence })]);
             for (const prazo of resultadoIA.deadlines) if (/^\d{4}-\d{2}-\d{2}$/.test(prazo.data || '')) await cliente.query('INSERT INTO document_deadlines (document_id, description, due_date) VALUES ($1, $2, $3)', [documentId, prazo.descricao || 'Prazo identificado', prazo.data]);
             await cliente.query(`UPDATE documents SET original_name = CASE WHEN storage_url = 'text://manual-entry' AND original_name = 'Texto digitado' AND $2 <> '' THEN $2 ELSE original_name END, status = 'done', error_message = NULL, updated_at = NOW() WHERE id = $1`, [documentId, generatedTitle]);
             await cliente.query('COMMIT');
         } catch (erro) { await cliente.query('ROLLBACK'); throw erro; } finally { cliente.release(); }
-    } catch (erro) { await setState(documentId, 'failed', String(erro.message || FAIL_MESSAGE).slice(0, 500)); throw erro; }
+    } catch (erro) {
+        if (usageReservationId) {
+            await BD.query('DELETE FROM usage_logs WHERE id = $1 AND user_id = $2', [usageReservationId, userId]).catch((cleanupError) => logger.error({ err: cleanupError, usageReservationId }, 'Falha ao liberar reserva de cota'));
+        }
+        throw erro;
+    }
 }
 
 export async function expirarDocumentosParados() {
-    const resultado = await BD.query(`UPDATE documents SET status = 'failed', error_message = $1, updated_at = NOW() WHERE status IN ('queued', 'processing', 'extracted', 'analyzing') AND updated_at < NOW() - INTERVAL '5 minutes' RETURNING id`, [FAIL_MESSAGE]);
+    const resultado = await BD.query(`UPDATE documents SET status = 'failed', error_message = $1, updated_at = NOW() WHERE status IN ('queued', 'processing', 'extracted', 'analyzing') AND updated_at < NOW() - INTERVAL '30 minutes' RETURNING id`, [FAIL_MESSAGE]);
     if (resultado.rowCount) logger.warn({ documentIds: resultado.rows.map((item) => item.id) }, 'Timeout guard finalizou documentos parados');
 }

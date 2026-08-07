@@ -1,21 +1,24 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'node:path';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
 import { validar, validarUuidParam } from '../middlewares/validar.js';
 import { documentTypeSchema, textDocumentSchema } from '../schemas/documentSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
-import { salvarArquivo, removerArquivo, nomeArquivoDaUrl } from '../services/storageService.js';
-import { analisarDocumentoComIA } from '../services/iaService.js';
+import { salvarArquivo, removerArquivo, lerArquivoPorUrl } from '../services/storageService.js';
 import { parseBoletoInfo } from '../services/boletoService.js';
-import { env } from '../../config/env.js';
 import { enfileirarJob, enfileirarJobUnico } from '../services/jobService.js';
 import { logger } from '../../config/logger.js';
+import { env } from '../../config/env.js';
 
 const router = Router();
 
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+
+function publicDocument(documento) {
+    const { storage_path, user_id, extracted_text, ...publico } = documento;
+    return publico;
+}
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -58,6 +61,10 @@ router.post(
     asyncHandler(async (req, res) => {
         const { document_type } = req.body;
 
+        if (document_type === 'exame' && !env.SENSITIVE_DOCUMENTS_ENABLED) {
+            throw new AppError('Análise de exames ainda não está disponível nesta versão', 422);
+        }
+
         if (!req.file) {
             throw new AppError('Nenhum arquivo enviado', 400);
         }
@@ -76,7 +83,7 @@ router.post(
 
             return res.status(202).json({
                 message: 'Documento enviado e aguardando extração de texto',
-                documento: resultado.rows[0],
+                documento: publicDocument(resultado.rows[0]),
                 job: { id: job.id, status: job.status },
             });
         } catch (error) {
@@ -88,6 +95,7 @@ router.post(
 
 router.post('/text', autenticarToken, validar(textDocumentSchema), asyncHandler(async (req, res) => {
     const { document_type, text, name } = req.body;
+    if (document_type === 'exame' && !env.SENSITIVE_DOCUMENTS_ENABLED) throw new AppError('Análise de exames ainda não está disponível nesta versão', 422);
     const resultado = await BD.query(
         `INSERT INTO documents (user_id, original_name, document_type, storage_url, mime_type, extracted_text, status, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'extracted', NOW())
@@ -96,7 +104,7 @@ router.post('/text', autenticarToken, validar(textDocumentSchema), asyncHandler(
     );
     const documento = resultado.rows[0];
     const job = await enfileirarJobUnico('analyze_document', { documentId: documento.id, userId: req.usuario.id_usuario });
-    return res.status(202).json({ message: 'Texto enviado para análise', documento, job: { id: job.id, status: job.status } });
+    return res.status(202).json({ message: 'Texto enviado para análise', documento: publicDocument(documento), job: { id: job.id, status: job.status } });
 }));
 
 /**
@@ -111,7 +119,9 @@ router.post('/text', autenticarToken, validar(textDocumentSchema), asyncHandler(
  */
 router.get('/', autenticarToken, asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
+        `SELECT d.id, d.original_name, d.document_type, d.mime_type, d.status, d.error_message,
+                d.created_at, d.updated_at,
+                a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
                 a.raw_ai_response->'action_items' AS analysis_action_items,
                 a.created_at AS analysis_created_at
@@ -158,9 +168,10 @@ router.get('/jobs/:jobId', autenticarToken, validarUuidParam('jobId'), asyncHand
 }));
 
 router.post('/:id/retry', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
-    const resultado = await BD.query(`UPDATE documents SET status = 'queued', error_message = NULL, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'failed' RETURNING id`, [req.params.id, req.usuario.id_usuario]);
+    const resultado = await BD.query(`UPDATE documents SET status = CASE WHEN extracted_text IS NOT NULL AND BTRIM(extracted_text) <> '' THEN 'extracted' ELSE 'queued' END, error_message = NULL, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'failed' RETURNING id, extracted_text`, [req.params.id, req.usuario.id_usuario]);
     if (!resultado.rows[0]) throw new AppError('Este documento não pode ser reprocessado', 409);
-    const job = await enfileirarJobUnico('extract_document_text', { documentId: req.params.id, userId: req.usuario.id_usuario });
+    const type = resultado.rows[0].extracted_text?.trim() ? 'analyze_document' : 'extract_document_text';
+    const job = await enfileirarJobUnico(type, { documentId: req.params.id, userId: req.usuario.id_usuario });
     return res.status(202).json({ message: 'Documento reenfileirado', job: { id: job.id, status: job.status } });
 }));
 
@@ -182,7 +193,9 @@ router.post('/:id/retry', autenticarToken, validarUuidParam(), asyncHandler(asyn
  */
 router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
+        `SELECT d.id, d.original_name, d.document_type, d.storage_url, d.mime_type,
+                d.extracted_text, d.status, d.error_message, d.created_at, d.updated_at,
+                a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
                 a.raw_ai_response->'action_items' AS analysis_action_items,
                 a.created_at AS analysis_created_at
@@ -223,7 +236,7 @@ router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req,
  */
 router.get('/:id/file', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'SELECT original_name, storage_url FROM documents WHERE id = $1 AND user_id = $2',
+        'SELECT original_name, storage_url, mime_type FROM documents WHERE id = $1 AND user_id = $2',
         [req.params.id, req.usuario.id_usuario]
     );
 
@@ -231,13 +244,16 @@ router.get('/:id/file', autenticarToken, validarUuidParam(), asyncHandler(async 
         throw new AppError('Documento não encontrado', 404);
     }
 
-    const nomeArquivo = nomeArquivoDaUrl(resultado.rows[0].storage_url);
-    if (!nomeArquivo) throw new AppError('Arquivo do documento não encontrado', 404);
-
-    return res.sendFile(nomeArquivo, {
-        root: path.resolve(env.STORAGE_DIR),
-        headers: { 'Content-Disposition': `attachment; filename="${resultado.rows[0].original_name.replace(/[\r\n"]/g, '')}"` },
+    if (resultado.rows[0].storage_url === 'text://manual-entry') throw new AppError('Este documento não possui arquivo original', 404);
+    const arquivo = await lerArquivoPorUrl(resultado.rows[0].storage_url);
+    const nomeSeguro = resultado.rows[0].original_name.replace(/[\r\n"\\/]/g, '_');
+    res.set({
+        'Content-Type': resultado.rows[0].mime_type || 'application/octet-stream',
+        'Content-Length': String(arquivo.length),
+        'Content-Disposition': `attachment; filename="${nomeSeguro}"`,
+        'Cache-Control': 'private, no-store',
     });
+    return res.send(arquivo);
 }));
 
 /**
@@ -292,7 +308,13 @@ router.get('/:id/boleto', autenticarToken, validarUuidParam(), asyncHandler(asyn
  */
 router.get('/:id/contract-summary', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'SELECT document_type, extracted_text FROM documents WHERE id = $1 AND user_id = $2',
+        `SELECT d.document_type, a.summary, a.deadlines, a.costs, a.warnings
+           FROM documents d
+           LEFT JOIN LATERAL (
+               SELECT summary, deadlines, costs, warnings FROM analyses
+                WHERE document_id = d.id ORDER BY created_at DESC LIMIT 1
+           ) a ON true
+          WHERE d.id = $1 AND d.user_id = $2`,
         [req.params.id, req.usuario.id_usuario]
     );
 
@@ -305,12 +327,8 @@ router.get('/:id/contract-summary', autenticarToken, validarUuidParam(), asyncHa
         throw new AppError('Documento não é do tipo contrato', 400);
     }
 
-    if (!documento.extracted_text?.trim()) {
-        throw new AppError('Documento não possui texto extraído para análise', 422);
-    }
-
-    const resumo = await analisarDocumentoComIA(documento.extracted_text, 'contrato');
-    return res.status(200).json({ contract_summary: resumo });
+    if (!documento.summary) throw new AppError('A análise do contrato ainda não está disponível', 404);
+    return res.status(200).json({ contract_summary: { summary: documento.summary, deadlines: documento.deadlines || [], costs: documento.costs || [], warnings: documento.warnings || [] } });
 }));
 
 /**
@@ -331,7 +349,7 @@ router.get('/:id/contract-summary', autenticarToken, validarUuidParam(), asyncHa
  */
 router.delete('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
-        'DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING storage_url',
+        'DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING storage_url, storage_path',
         [req.params.id, req.usuario.id_usuario]
     );
 
@@ -339,10 +357,7 @@ router.delete('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (r
         throw new AppError('Documento não encontrado', 404);
     }
 
-    const nomeArquivo = nomeArquivoDaUrl(resultado.rows[0].storage_url);
-    if (nomeArquivo) {
-        await removerArquivo(path.join(env.STORAGE_DIR, nomeArquivo));
-    }
+    await removerArquivo(resultado.rows[0].storage_url || resultado.rows[0].storage_path);
 
     return res.status(200).json({ message: 'Documento removido com sucesso' });
 }));

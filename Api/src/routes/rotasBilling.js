@@ -11,8 +11,14 @@ import {
 import { criarCheckoutPremium, confirmarPagamentoPremium, processStripeWebhook } from '../services/paymentService.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 import { BD } from '../../db.js';
+import { env } from '../../config/env.js';
 
 const router = Router();
+
+function exigirPagamentosAtivos(req, res, next) {
+    if (env.PAYMENT_PROVIDER === 'none') return next(new AppError('Pagamentos não estão disponíveis nesta versão', 404));
+    return next();
+}
 
 /**
  * @swagger
@@ -55,7 +61,7 @@ router.get('/plan', autenticarToken, asyncHandler(async (req, res) => {
  *     responses:
  *       200: { description: "Checkout iniciado" }
  */
-router.post('/checkout', autenticarToken, validar(checkoutSchema), asyncHandler(async (req, res) => {
+router.post('/checkout', exigirPagamentosAtivos, autenticarToken, validar(checkoutSchema), asyncHandler(async (req, res) => {
     const { payment_method, customer_name, customer_email } = req.body;
     const data = await criarCheckoutPremium(
         req.usuario.id_usuario,
@@ -82,7 +88,7 @@ router.post('/checkout', autenticarToken, validar(checkoutSchema), asyncHandler(
  *     responses:
  *       200: { description: "Pagamento confirmado" }
  */
-router.post('/confirm', autenticarToken, validar(confirmPaymentSchema), asyncHandler(async (req, res) => {
+router.post('/confirm', exigirPagamentosAtivos, autenticarToken, validar(confirmPaymentSchema), asyncHandler(async (req, res) => {
     const { payment_intent_id } = req.body;
     const data = await confirmarPagamentoPremium(req.usuario.id_usuario, payment_intent_id);
     return res.status(200).json(data);
@@ -98,7 +104,7 @@ router.post('/confirm', autenticarToken, validar(confirmPaymentSchema), asyncHan
  *     responses:
  *       200: { description: "Assinatura cancelada" }
  */
-router.post('/cancel', autenticarToken, asyncHandler(async (req, res) => {
+router.post('/cancel', exigirPagamentosAtivos, autenticarToken, asyncHandler(async (req, res) => {
     await cancelarAssinaturaPremium(req.usuario.id_usuario);
     return res.status(200).json({ message: 'Assinatura cancelada e usuário rebaixado para free' });
 }));
@@ -118,7 +124,7 @@ router.get('/subscriptions', autenticarToken, asyncHandler(async (req, res) => {
     return res.status(200).json({ subscriptions });
 }));
 
-router.post('/webhook', asyncHandler(async (req, res) => {
+router.post('/webhook', exigirPagamentosAtivos, asyncHandler(async (req, res) => {
     const signature = req.headers['stripe-signature'];
     const result = await processStripeWebhook(req.rawBody, signature);
     return res.status(200).json(result);

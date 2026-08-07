@@ -8,20 +8,30 @@ import { common } from '../theme';
 import { date, typeLabel } from './shared';
 
 const violet = '#5D43F2';
-const filters = [['todos', 'Todos'], ['contrato', 'Contrato'], ['exame', 'Exame'], ['boleto', 'Boleto']];
+const filters = [['todos', 'Todos'], ['contrato', 'Contrato'], ['exame', 'Exame'], ['boleto', 'Boleto'], ['termo_de_uso', 'Termo'], ['outro', 'Outro']];
 const typeVisuals = {
-  contrato: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText, risk: 'Risco médio identificado pela IA', riskColor: '#FFC52E' },
-  exame: { color: '#24D6AF', background: '#24D6AF1F', Icon: HeartPulse, risk: 'Risco baixo identificado pela IA', riskColor: '#43E6B6' },
-  boleto: { color: '#E5BD3E', background: '#E5BD3E1F', Icon: ReceiptText, risk: 'Risco médio identificado pela IA', riskColor: '#FFC52E' },
-  outro: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText, risk: 'Documento analisado pela IA', riskColor: '#8B80FF' },
+  contrato: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText },
+  exame: { color: '#24D6AF', background: '#24D6AF1F', Icon: HeartPulse },
+  boleto: { color: '#E5BD3E', background: '#E5BD3E1F', Icon: ReceiptText },
+  outro: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText },
 };
 const searchFocusStyles = StyleSheet.create({ active: { borderColor: '#5D43F2', boxShadow: '0 0 10px rgba(93, 67, 242, 0.30)', shadowColor: '#5D43F2', shadowOpacity: .28, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4 } });
 
 function visualFor(document) { return typeVisuals[document.document_type] || typeVisuals.outro; }
 
+function statusFor(document) {
+  if (document.status === 'failed') return { label: document.error_message || 'Falha no processamento', color: '#FF7E8A' };
+  if (document.status !== 'done') return { label: 'Processamento em andamento', color: '#8B80FF' };
+  const warnings = document.analysis_warnings || [];
+  const critical = warnings.some((item) => ['critico', 'crítico', 'critical'].includes(String(item?.prioridade || item?.priority || '').toLowerCase()));
+  if (critical) return { label: 'Aviso crítico na análise — revise os detalhes', color: '#FF737D' };
+  if (warnings.length) return { label: 'A análise contém pontos de atenção', color: '#FFC52E' };
+  return { label: 'Análise concluída', color: '#43E6B6' };
+}
+
 function DocumentRow({ document, openDocument }) {
-  const visual = visualFor(document); const Icon = visual.Icon;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Abrir ${document.original_name}`} onPress={() => openDocument(document.id)} style={({ pressed }) => [styles.document, pressed && styles.documentPressed]}><View style={styles.documentMain}><View style={[styles.fileIcon, { backgroundColor: visual.background }]}><Icon size={19} color={visual.color} strokeWidth={1.9} /></View><View style={styles.documentCopy}><Text numberOfLines={1} style={styles.documentName}>{document.original_name}</Text><View style={styles.metaLine}><Text style={[styles.typeTag, { color: visual.color, backgroundColor: visual.background }]}>{typeLabel[document.document_type] || 'DOCUMENTO'}</Text><Text style={styles.documentDate}>Analisado · {date(document.created_at)}</Text></View></View><ChevronRight size={17} color="#626578" /></View><View style={styles.riskLine}><View style={[styles.riskDot, { backgroundColor: visual.riskColor }]} /><Text style={styles.riskText}>{visual.risk}</Text></View></Pressable>;
+  const visual = visualFor(document); const Icon = visual.Icon; const status = statusFor(document);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Abrir ${document.original_name}`} onPress={() => openDocument(document.id)} style={({ pressed }) => [styles.document, pressed && styles.documentPressed]}><View style={styles.documentMain}><View style={[styles.fileIcon, { backgroundColor: visual.background }]}><Icon size={19} color={visual.color} strokeWidth={1.9} /></View><View style={styles.documentCopy}><Text numberOfLines={1} style={styles.documentName}>{document.original_name}</Text><View style={styles.metaLine}><Text style={[styles.typeTag, { color: visual.color, backgroundColor: visual.background }]}>{typeLabel[document.document_type] || 'DOCUMENTO'}</Text><Text style={styles.documentDate}>{date(document.created_at)}</Text></View></View><ChevronRight size={17} color="#626578" /></View><View style={styles.riskLine}><View style={[styles.riskDot, { backgroundColor: status.color }]} /><Text numberOfLines={2} style={styles.riskText}>{status.label}</Text></View></Pressable>;
 }
 
 function EmptyDocuments({ hasDocuments, onUpload }) {
@@ -32,14 +42,15 @@ function EmptyDocuments({ hasDocuments, onUpload }) {
 }
 
 export default function DocumentsV2({ openDocument, navigate }) {
-  const [documents, setDocuments] = useState(); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [type, setType] = useState('todos'); const [searchFocused, setSearchFocused] = useState(false);
+  const [documents, setDocuments] = useState(); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [type, setType] = useState('todos'); const [searchFocused, setSearchFocused] = useState(false); const [refreshing, setRefreshing] = useState(false);
   const load = useCallback(async () => { try { setError(''); setDocuments(await documentsApi.list()); } catch (err) { setError(err.message); } }, []);
   useEffect(() => { load(); }, [load]);
+  const refresh = async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } };
   const filtered = useMemo(() => (documents || []).filter((document) => (type === 'todos' || document.document_type === type) && document.original_name.toLowerCase().includes(query.trim().toLowerCase())), [documents, query, type]);
   if (error && !documents) return <ScrollView style={common.screen}><ErrorState error={error} retry={load} /></ScrollView>;
   if (!documents) return <ScrollView contentContainerStyle={styles.loading}><Skeleton height={62} /><Skeleton height={48} /><Skeleton height={118} /><Skeleton height={118} /></ScrollView>;
-  return <ScrollView style={common.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={violet} />}>
-    <View><Text style={styles.title}>Documentos</Text><Text style={styles.subtitle}>{documents.length} arquivo{documents.length === 1 ? '' : 's'} analisado{documents.length === 1 ? '' : 's'}</Text></View>
+  return <ScrollView style={common.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={violet} />}>
+    <View><Text style={styles.title}>Documentos</Text><Text style={styles.subtitle}>{documents.length} arquivo{documents.length === 1 ? '' : 's'} · {documents.filter((item) => item.status === 'done').length} concluído{documents.filter((item) => item.status === 'done').length === 1 ? '' : 's'}</Text></View>
     {error ? <ErrorState error={error} retry={load} /> : null}
     <View style={[styles.search, searchFocused && searchFocusStyles.active]}><Search size={18} color={searchFocused ? violet : '#747789'} strokeWidth={1.8} /><TextInput value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Buscar documentos..." placeholderTextColor="#858797" selectionColor={violet} autoCorrect={false} style={styles.searchInput} accessibilityLabel="Buscar documentos" /></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{filters.map(([value, label]) => <Pressable key={value} accessibilityRole="button" onPress={() => setType(value)} style={({ pressed }) => [styles.filter, type === value && styles.filterActive, pressed && styles.filterPressed]}><Text style={[styles.filterText, type === value && styles.filterTextActive]}>{label}</Text></Pressable>)}</ScrollView>

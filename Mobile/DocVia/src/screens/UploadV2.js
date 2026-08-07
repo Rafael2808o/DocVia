@@ -1,16 +1,15 @@
 /* eslint-disable react-hooks/static-components */
-import React, { useEffect, useState } from 'react';
-import { Alert, Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Rect } from 'react-native-svg';
-import { Camera, Check, CircleAlert, FileCheck2, FileText, Image as ImageIcon, TextCursorInput, Trash2, Upload } from 'lucide-react-native';
+import { Camera, Check, CircleAlert, FileText, TextCursorInput, Trash2, Upload } from 'lucide-react-native';
 import { documentsApi, userApi } from '../services/api';
 import { common } from '../theme';
+import { loadNotificationSettings, scheduleDeadlineAlerts } from '../services/notificationSettings';
 
-const types = [['contrato', 'Contrato'], ['exame', 'Exame'], ['boleto', 'Boleto'], ['termo_de_uso', 'Termo de Uso'], ['outro', 'Outro']];
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const progressTargets = { queued: 20, processing: 40, extracted: 60, analyzing: 80, done: 100 };
+const types = [['contrato', 'Contrato'], ['boleto', 'Boleto'], ['termo_de_uso', 'Termo de Uso'], ['outro', 'Outro']];
 const ringCircumference = 2 * Math.PI * 24;
 const steps = [{ key: 'queued', label: 'Enviado' }, { key: 'processing', label: 'Extraindo texto' }, { key: 'extracted', label: 'Texto extraído' }, { key: 'analyzing', label: 'Analisando com IA' }, { key: 'done', label: 'Pronto' }];
 
@@ -18,8 +17,9 @@ function SourceButton({ Icon, label, active, onPress }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={({ pressed }) => [styles.source, active && styles.sourceActive, pressed && styles.pressed]}><Icon size={18} color={active ? '#A99DFF' : '#989AAA'} strokeWidth={1.8} /><Text style={[styles.sourceText, active && styles.sourceTextActive]}>{label}</Text></Pressable>;
 }
 
-function ProgressRing({ progress, progressOffset }) {
-  return <View style={styles.progressSymbol}><Svg width={58} height={58} viewBox="0 0 58 58" style={styles.progressRing}><Circle cx="29" cy="29" r="24" fill="none" stroke="#2D294C" strokeWidth="4" /><AnimatedCircle cx="29" cy="29" r="24" fill="none" stroke="#8B80FF" strokeWidth="4" strokeLinecap="round" strokeDasharray={ringCircumference} strokeDashoffset={progressOffset} transform="rotate(-90 29 29)" /></Svg><Text style={styles.progressPercent}>{progress}%</Text></View>;
+function ProgressRing({ progress }) {
+  const progressOffset = ringCircumference * (1 - progress / 100);
+  return <View style={styles.progressSymbol}><Svg width={58} height={58} viewBox="0 0 58 58" style={styles.progressRing}><Circle cx="29" cy="29" r="24" fill="none" stroke="#2D294C" strokeWidth="4" /><Circle cx="29" cy="29" r="24" fill="none" stroke="#8B80FF" strokeWidth="4" strokeLinecap="round" strokeDasharray={ringCircumference} strokeDashoffset={progressOffset} transform="rotate(-90 29 29)" /></Svg><Text style={styles.progressPercent}>{progress}%</Text></View>;
 }
 
 export default function UploadV2({ navigate }) {
@@ -30,9 +30,7 @@ export default function UploadV2({ navigate }) {
   const [consent, setConsent] = useState(false);
   const [sending, setSending] = useState(false);
   const [document, setDocument] = useState();
-  const [progressAnimation] = useState(() => new Animated.Value(0));
-  const [progress, setProgress] = useState(0);
-  const [visualComplete, setVisualComplete] = useState(false);
+  const scheduledDocumentId = useRef();
 
   const pick = async (mode) => {
     setSource(mode);
@@ -41,9 +39,9 @@ export default function UploadV2({ navigate }) {
       const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
       if (!result.canceled) asset = result.assets[0];
     } else {
-      const permission = mode === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) return Alert.alert('Permissão necessária', 'Permita o acesso para selecionar ou digitalizar o documento.');
-      const result = mode === 'camera' ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: .9 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: .9 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: .9 });
       if (!result.canceled) asset = result.assets[0];
     }
     if (!asset) return;
@@ -59,9 +57,6 @@ export default function UploadV2({ navigate }) {
     try {
       await userApi.consent();
       const response = source === 'text' ? await documentsApi.uploadText(manualText.trim(), type) : await documentsApi.upload(file.webFile || { uri: file.uri, name: file.name, type: file.type }, type);
-      progressAnimation.setValue(0);
-      setProgress(0);
-      setVisualComplete(false);
       setDocument(response.documento);
     } catch (error) {
       Alert.alert('Não foi possível enviar', error.message);
@@ -77,27 +72,23 @@ export default function UploadV2({ navigate }) {
   }, [document?.id, document?.status]);
 
   useEffect(() => {
-    if (!document || document.status === 'failed') return undefined;
-    const isFinished = document.status === 'done';
-    const target = progressTargets[document.status] ?? 20;
-    const subscription = progressAnimation.addListener(({ value }) => setProgress(Math.round(value)));
-    progressAnimation.stopAnimation((current) => {
-      Animated.timing(progressAnimation, {
-        toValue: target,
-        duration: Math.max(180, Math.min(700, Math.abs(target - current) * 8)),
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start(({ finished }) => { if (finished && isFinished) setVisualComplete(true); });
-    });
-    return () => progressAnimation.removeListener(subscription);
-  }, [document?.status, progressAnimation]);
+    if (document?.status !== 'done' || scheduledDocumentId.current === document.id) return;
+    scheduledDocumentId.current = document.id;
+    Promise.all([documentsApi.list(), loadNotificationSettings()])
+      .then(([documents, settings]) => scheduleDeadlineAlerts(documents, settings))
+      .catch(() => undefined);
+  }, [document?.id, document?.status]);
 
   if (document) {
     const failed = document.status === 'failed';
-    const done = document.status === 'done' && visualComplete;
+    // A conclusão da análise vem da API. Não espere a animação terminar para
+    // mostrar o resultado, pois ela pode ser interrompida ao renderizar na web.
+    const done = ['done', 'completed'].includes(document.status);
     const current = failed ? -1 : done ? steps.length - 1 : Math.max(0, steps.findIndex((step) => step.key === document.status));
-    const ResultIcon = failed ? CircleAlert : done ? FileCheck2 : () => <ProgressRing progress={progress} progressOffset={progressOffset} />;
-    const progressOffset = progressAnimation.interpolate({ inputRange: [0, 100], outputRange: [ringCircumference, 0] });
+    // O percentual conta apenas as etapas já concluídas. A etapa atual fica
+    // em andamento e só soma 20% quando o status avança para a próxima.
+    const progress = done ? 100 : current * 20;
+    const ResultIcon = failed ? CircleAlert : () => <ProgressRing progress={progress} />;
     return <ScrollView style={common.screen} contentContainerStyle={styles.resultContent}>
       <View style={styles.resultIntro}><View style={[styles.resultIcon, failed && styles.resultIconError]}><ResultIcon size={27} color={failed ? '#FF7E8A' : '#A99DFF'} strokeWidth={1.8} /></View><Text style={styles.resultEyebrow}>{failed ? 'NÃO FOI POSSÍVEL CONCLUIR' : done ? 'ANÁLISE CONCLUÍDA' : 'ANALISANDO DOCUMENTO'}</Text><Text style={styles.resultTitle}>{failed ? 'Algo deu errado' : done ? 'Documento analisado' : 'Estamos cuidando disso'}</Text><Text style={styles.resultSubtitle}>{failed ? document.error_message || 'Tente novamente em alguns instantes.' : done ? 'Sua análise está pronta para ser consultada.' : 'Você pode acompanhar cada etapa abaixo.'}</Text></View>
       <View style={[styles.progressCard, failed && styles.progressCardError]}>{steps.map((step, index) => { const completed = (index < current || done) && !failed; const active = index === current && !done && !failed; return <View key={step.key} style={styles.progressStep}><View style={styles.progressMarker}>{index < steps.length - 1 ? <View style={[styles.progressLine, completed && styles.progressLineDone]} /> : null}<View style={[styles.progressDot, completed && styles.progressDotDone, active && styles.progressDotActive, failed && index === current && styles.progressDotError]}>{completed ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}</View></View><Text style={[styles.progressText, completed && styles.progressTextDone, active && styles.progressTextActive]}>{step.label}</Text></View>; })}</View>
@@ -115,7 +106,7 @@ export default function UploadV2({ navigate }) {
       </View>{file?.type?.startsWith('image') ? <Image source={{ uri: file.uri }} style={styles.preview} /> : null}
       {file ? <Pressable accessibilityLabel="Remover arquivo" onPress={() => setFile(undefined)} style={styles.remove}><Trash2 size={15} color="#FF7E8A" /><Text style={styles.removeText}>Remover</Text></Pressable> : null}
     </Pressable>}
-    <View style={styles.sources}><SourceButton Icon={FileText} label="Arquivo" active={source === 'file'} onPress={() => pick('file')} /><SourceButton Icon={ImageIcon} label="Fotos" active={source === 'image'} onPress={() => pick('image')} /><SourceButton Icon={Camera} label="Câmera" active={source === 'camera'} onPress={() => pick('camera')} /><SourceButton Icon={TextCursorInput} label="Texto" active={source === 'text'} onPress={() => setSource('text')} /></View>
+    <View style={styles.sources}><SourceButton Icon={FileText} label="Arquivo ou foto" active={source === 'file'} onPress={() => pick('file')} /><SourceButton Icon={Camera} label="Câmera" active={source === 'camera'} onPress={() => pick('camera')} /><SourceButton Icon={TextCursorInput} label="Texto" active={source === 'text'} onPress={() => setSource('text')} /></View>
     <View style={styles.typeSection}><Text style={styles.typeLabel}>TIPO DO DOCUMENTO</Text><View style={styles.chips}>{types.map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ selected: type === value }} onPress={() => setType(value)} style={({ pressed }) => [styles.chip, type === value && styles.chipOn, pressed && styles.pressed]}><Text style={[styles.chipText, type === value && styles.chipTextOn]}>{label}</Text></Pressable>)}</View></View>
     <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(!consent)} style={styles.consent}><View style={[styles.checkbox, consent && styles.checkboxOn]}>{consent ? <Text style={styles.check}>✓</Text> : null}</View><Text style={styles.consentText}>Autorizo o processamento deste documento{`\n`}conforme a <Text style={styles.policy}>política de privacidade.</Text></Text></Pressable>
     <Pressable accessibilityRole="button" disabled={!(source === 'text' ? manualText.trim().length >= 20 : file) || !consent || sending} onPress={send} style={({ pressed }) => [styles.send, (!(source === 'text' ? manualText.trim().length >= 20 : file) || !consent || sending) && styles.sendDisabled, pressed && (source === 'text' ? manualText.trim().length >= 20 : file) && consent && styles.pressed]}><Text style={[styles.sendText, (!(source === 'text' ? manualText.trim().length >= 20 : file) || !consent || sending) && styles.sendTextDisabled]}>{sending ? 'Enviando...' : 'Enviar para análise'}</Text></Pressable>

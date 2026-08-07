@@ -148,6 +148,17 @@ CREATE TABLE IF NOT EXISTS document_deadlines (
 );
 CREATE INDEX IF NOT EXISTS idx_document_deadlines_due_date ON document_deadlines(due_date);
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_active
+    ON password_reset_tokens(token_hash, expires_at) WHERE used_at IS NULL;
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_plan_check') THEN
@@ -162,3 +173,16 @@ BEGIN
             CHECK (status IN ('pending', 'processing', 'done', 'failed'));
     END IF;
 END $$;
+
+-- Migration 004: estados completos do pipeline e proteção contra jobs parados.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS storage_path TEXT;
+ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_status_check;
+UPDATE documents SET status = 'queued', updated_at = NOW() WHERE status = 'pending';
+ALTER TABLE documents ADD CONSTRAINT documents_status_check
+    CHECK (status IN ('queued', 'processing', 'extracted', 'analyzing', 'done', 'failed'));
+CREATE INDEX IF NOT EXISTS idx_documents_processing_guard
+    ON documents(status, updated_at) WHERE status IN ('queued', 'processing', 'extracted', 'analyzing');
+CREATE INDEX IF NOT EXISTS idx_jobs_document_active
+    ON jobs(type, (payload->>'documentId')) WHERE status IN ('queued', 'processing');

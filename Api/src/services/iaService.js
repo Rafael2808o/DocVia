@@ -17,11 +17,9 @@ async function chamarGemini(textoExtraido) {
     const url = new URL(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`
     );
-    url.searchParams.set('key', env.GEMINI_API_KEY);
-
     const resposta = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
         body: JSON.stringify({
             systemInstruction: { parts: [{ text: INSTRUCAO_SISTEMA }] },
             contents: [{ role: 'user', parts: [{ text: textoExtraido }] }],

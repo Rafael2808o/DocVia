@@ -3,19 +3,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell, BellOff, CalendarDays, ChevronRight } from 'lucide-react-native';
 import { Button, Sheet } from './ui';
 import { loadNotificationSettings } from '../services/notificationSettings';
-
-function parseDueDate(value) {
-  const raw = String(value || '');
-  const iso = raw.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  const br = raw.match(/\b([0-3]?\d)[/-]([0-1]?\d)[/-](\d{4})\b/);
-  return br ? new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1])) : null;
-}
+import { deadlineDate, deadlineDescription } from '../utils/deadlines';
 
 function deadlineAlerts(documents) {
   return documents.flatMap((document) => (document.analysis_deadlines || []).map((item, index) => {
-    const description = typeof item === 'string' ? item : item.description || item.descricao || 'Prazo identificado';
-    const dueDate = parseDueDate(typeof item === 'string' ? item : item.due_date || item.data || description);
+    const description = deadlineDescription(item);
+    const dueDateValue = deadlineDate(item);
+    const dueDate = dueDateValue ? new Date(`${dueDateValue}T00:00:00`) : null;
     if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     dueDate.setHours(0, 0, 0, 0);
@@ -32,7 +26,7 @@ function dueLabel(days) {
 }
 
 export default function NotificationCenter({ visible, onClose, documents = [], onViewDeadlines }) {
-  const [settings, setSettings] = useState({ alertsEnabled: true, quietMode: false });
+  const [settings, setSettings] = useState({ alertsEnabled: false, quietMode: false });
   const alerts = useMemo(() => deadlineAlerts(documents), [documents]);
 
   useEffect(() => { if (visible) loadNotificationSettings().then(setSettings); }, [visible]);

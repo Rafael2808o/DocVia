@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { Bell, BellRing, ChevronRight, CreditCard, FileText, LockKeyhole, Moon, Trash2 } from 'lucide-react-native';
+import { Bell, BellRing, ChevronRight, FileText, LockKeyhole, Moon, Trash2 } from 'lucide-react-native';
 import { billingApi, documentsApi, userApi } from '../services/api';
 import { loadNotificationSettings, requestDeviceNotificationPermission, saveNotificationSettings, scheduleDeadlineAlerts } from '../services/notificationSettings';
 import { Button, Card, ErrorState, Input, Sheet, Skeleton } from '../components/ui';
@@ -34,12 +34,13 @@ export default function ProfileV2({ user, onLogout, navigate }) {
   const [usage, setUsage] = useState();
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [quietMode, setQuietMode] = useState(false);
   const [sheet, setSheet] = useState();
   const [plan, setPlan] = useState();
   const [deletePassword, setDeletePassword] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -57,8 +58,10 @@ export default function ProfileV2({ user, onLogout, navigate }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  const refresh = async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } };
 
   const deadlineCount = useMemo(() => documents.reduce((total, document) => total + (document.analysis_deadlines?.length || 0), 0), [documents]);
+  const completedDocumentCount = useMemo(() => documents.filter((document) => document.status === 'done').length, [documents]);
 
   const saveAlerts = async (nextSettings) => {
     const settings = await saveNotificationSettings(nextSettings);
@@ -117,7 +120,7 @@ export default function ProfileV2({ user, onLogout, navigate }) {
 
   return (
     <View style={styles.page}>
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.primary} />}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}>
       <View style={styles.heading}><View><Text style={styles.title}>Perfil</Text><Text style={styles.subtitle}>Conta, alertas e privacidade</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Abrir notificações" onPress={() => setNotificationsOpen(true)} style={({ pressed }) => [styles.notification, pressed && styles.menuPressed]}><Bell size={19} color="#9A9CAC" strokeWidth={1.8} /></Pressable></View>
 
       <Card style={styles.userCard}>
@@ -125,24 +128,20 @@ export default function ProfileV2({ user, onLogout, navigate }) {
         <View style={styles.userCopy}><Text style={styles.name}>{user?.name || 'Sua conta'}</Text><Text style={styles.email}>{user?.email}</Text><View style={styles.planBadge}><Text style={styles.planText}>{planName}</Text></View></View>
       </Card>
 
-      <View style={styles.stats}><Stat Icon={FileText} value={documents.length} label="documentos analisados" /><Stat Icon={BellRing} value={deadlineCount} label="prazos monitorados" color="#24D6AF" /></View>
+      <View style={styles.stats}><Stat Icon={FileText} value={completedDocumentCount} label="documentos concluídos" /><Stat Icon={BellRing} value={deadlineCount} label="prazos monitorados" color="#24D6AF" /></View>
 
       <Text style={styles.sectionTitle}>Notificações</Text>
       <Setting Icon={BellRing} title="Alertas de prazo" description="Avisos 7, 3 e 1 dia antes do vencimento" value={alertsEnabled} onValueChange={changeAlerts} />
       <Setting Icon={Moon} title="Modo silencioso" description="Sem alertas entre 22h e 7h" value={quietMode} onValueChange={changeQuietMode} />
 
       <Text style={styles.sectionTitle}>Conta</Text>
-      <MenuItem Icon={CreditCard} title="Plano e pagamento" onPress={() => setSheet('plan')} />
       <MenuItem Icon={LockKeyhole} title="Privacidade e dados" onPress={() => setSheet('privacy')} color="#20B9EF" />
       <MenuItem Icon={Trash2} title="Excluir conta" destructive onPress={() => setSheet('delete')} />
       <Pressable accessibilityRole="button" accessibilityLabel="Sair da conta" onPress={onLogout} style={({ pressed }) => [styles.logoutButton, pressed && styles.menuPressed]}><Text style={styles.logoutText}>Sair da conta</Text></Pressable>
 
-      <Sheet visible={sheet === 'plan'} title="Plano e pagamento" onClose={() => setSheet(undefined)}>
-        <Text style={styles.sheetText}>Seu plano atual é {planName}. As cobranças e o histórico da assinatura são processados com segurança.</Text>
-        <Button title="Fechar" variant="secondary" onPress={() => setSheet(undefined)} />
-      </Sheet>
       <Sheet visible={sheet === 'privacy'} title="Privacidade e dados" onClose={() => setSheet(undefined)}>
         <Text style={styles.sheetText}>Você pode exportar todos os dados da sua conta ou registrar seu consentimento de privacidade.</Text>
+        <Button title="Ler política de privacidade" onPress={() => { setSheet(undefined); navigate?.('privacy'); }} />
         <Button title="Exportar meus dados" onPress={exportData} />
         <Button title="Registrar consentimento" variant="secondary" onPress={() => userApi.consent().then(() => Alert.alert('Consentimento registrado')).catch((nextError) => Alert.alert('Erro', nextError.message))} />
       </Sheet>
