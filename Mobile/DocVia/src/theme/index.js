@@ -1,22 +1,22 @@
 import { StyleSheet } from 'react-native';
 
 export const colors = {
-  background: '#0B0D12',
-  surface: '#14161B',
-  surfaceRaised: '#1B1F27',
-  border: 'rgba(255,255,255,0.08)',
-  text: '#F5F7FA',
-  muted: '#A5AEC0',
-  tertiary: '#6E7788',
-  primary: '#3B82F6',
-  primaryDark: '#2563EB',
-  primarySoft: '#3B82F624',
+  background: '#020202',
+  surface: '#090B0C',
+  surfaceRaised: '#121619',
+  border: 'rgba(255,255,255,0.20)',
+  text: '#EEF7FB',
+  muted: '#9DB8C5',
+  tertiary: '#718894',
+  primary: '#B2D5E5',
+  primaryDark: '#8FBCCC',
+  primarySoft: '#B2D5E524',
   // O app usa azul como único tom de destaque, inclusive em estados concluídos.
-  success: '#3B82F6',
-  warning: '#F59E0B',
+  success: '#B2D5E5',
+  warning: '#B2D5E5',
   error: '#EF4444',
-  ai: '#8B5CF6',
-  aiSoft: '#8B5CF61F',
+  ai: '#B2D5E5',
+  aiSoft: '#B2D5E51F',
   white: '#FFFFFF',
 };
 export const spacing = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32, xxxl: 40 };

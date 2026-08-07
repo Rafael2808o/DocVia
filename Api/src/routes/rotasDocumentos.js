@@ -4,7 +4,7 @@ import path from 'node:path';
 import { BD } from '../../db.js';
 import { autenticarToken } from '../middlewares/autenticacao.js';
 import { validar, validarUuidParam } from '../middlewares/validar.js';
-import { documentTypeSchema } from '../schemas/documentSchemas.js';
+import { documentTypeSchema, textDocumentSchema } from '../schemas/documentSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 import { salvarArquivo, removerArquivo, nomeArquivoDaUrl } from '../services/storageService.js';
 import { analisarDocumentoComIA } from '../services/iaService.js';
@@ -86,6 +86,19 @@ router.post(
     })
 );
 
+router.post('/text', autenticarToken, validar(textDocumentSchema), asyncHandler(async (req, res) => {
+    const { document_type, text, name } = req.body;
+    const resultado = await BD.query(
+        `INSERT INTO documents (user_id, original_name, document_type, storage_url, mime_type, extracted_text, status, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'extracted', NOW())
+         RETURNING *`,
+        [req.usuario.id_usuario, name || 'Texto digitado', document_type, 'text://manual-entry', 'text/plain', text.trim()]
+    );
+    const documento = resultado.rows[0];
+    const job = await enfileirarJobUnico('analyze_document', { documentId: documento.id, userId: req.usuario.id_usuario });
+    return res.status(202).json({ message: 'Texto enviado para análise', documento, job: { id: job.id, status: job.status } });
+}));
+
 /**
  * @swagger
  * /documents:
@@ -100,10 +113,11 @@ router.get('/', autenticarToken, asyncHandler(async (req, res) => {
     const resultado = await BD.query(
         `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
+                a.raw_ai_response->'action_items' AS analysis_action_items,
                 a.created_at AS analysis_created_at
          FROM documents d
          LEFT JOIN LATERAL (
-             SELECT summary, deadlines, costs, warnings, created_at
+             SELECT summary, deadlines, costs, warnings, raw_ai_response, created_at
              FROM analyses
              WHERE document_id = d.id
              ORDER BY created_at DESC
@@ -170,10 +184,11 @@ router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req,
     const resultado = await BD.query(
         `SELECT d.*, a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
+                a.raw_ai_response->'action_items' AS analysis_action_items,
                 a.created_at AS analysis_created_at
          FROM documents d
          LEFT JOIN LATERAL (
-             SELECT summary, deadlines, costs, warnings, created_at
+             SELECT summary, deadlines, costs, warnings, raw_ai_response, created_at
              FROM analyses
              WHERE document_id = d.id
              ORDER BY created_at DESC

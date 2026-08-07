@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { BD } from '../../db.js';
 
-const REFRESH_TOKEN_DIAS = 30;
+const REFRESH_TOKEN_DIAS = 365;
 
 function gerarTokenBruto() {
     return crypto.randomBytes(48).toString('hex');
