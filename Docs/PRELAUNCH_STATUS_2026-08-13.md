@@ -17,6 +17,7 @@
 
 - API: 21/21 testes automatizados aprovados; `npm audit --omit=dev` sem vulnerabilidades.
 - Mobile: TypeScript e ESLint aprovados; Expo Doctor 20/20 e dependências compatíveis com SDK 57.
+- Android: AAB de produção assinado pelo EAS concluído e baixado em `Builds/DocVia-1.0.0-1.aab` (61.435.173 bytes; SHA-256 `02AC8865FB10B10E5D3EC3CEA09F1AE5BFB56EA09587A57D834C5BC3BF59211C`). A estrutura contém manifesto, DEX, quatro arquiteturas nativas e assinatura RSA.
 - Produção real: cadastro, login, refresh token, isolamento entre usuários, consentimento, upload privado, criação por texto, processamento assíncrono, IA, prazos, exportação e exclusão completa de conta aprovados.
 - Segurança: MIME falso bloqueado; tipo sensível `exame` bloqueado; respostas privadas usam `Cache-Control: private, no-store`; rotas internas exigem segredo.
 - Acessibilidade web: auditoria WCAG A/AA sem violações na tela testada após correção do indicador de carregamento.
@@ -38,12 +39,11 @@
 
 ## Pendências que exigem o proprietário
 
-1. Confirmar a identidade na conta Google para gerar uma senha de app do Gmail. Até isso ocorrer, a recuperação de senha responde de forma segura, mas o e-mail não é entregue.
-2. Completar o endereço do perfil de pagamentos da Google; o perfil atual foi recusado como incompleto.
-3. Pagar a taxa única de USD 25 da Play Console. Nenhuma cobrança foi feita durante esta preparação.
-4. Verificar identidade/telefone conforme solicitado pela Google.
-5. Manter pelo menos 12 testadores inscritos no teste fechado por 14 dias contínuos e depois pedir acesso à produção.
-6. Testar o AAB em aparelhos Android físicos antes de promover para produção.
+1. Completar o endereço do perfil de pagamentos da Google; o perfil atual foi recusado como incompleto.
+2. Pagar a taxa única de USD 25 da Play Console. Nenhuma cobrança foi feita durante esta preparação.
+3. Verificar identidade/telefone conforme solicitado pela Google.
+4. Manter pelo menos 12 testadores inscritos no teste fechado por 14 dias contínuos e depois pedir acesso à produção.
+5. Testar o AAB em aparelhos Android físicos antes de promover para produção.
 
 ## Riscos restantes
 
@@ -53,7 +53,13 @@
 - O `npm audit` do app móvel ainda reporta avisos transitivos em ferramentas Expo/Metro. O Expo Doctor passa 20/20; as correções sugeridas pelo npm fariam downgrade incompatível, portanto não foram aplicadas.
 - Resumos de IA podem reproduzir trechos em vez de condensá-los; o aviso de limitação continua visível e conteúdo importante deve ser conferido no documento original.
 
+## Recuperação de senha
+
+- Senha de app exclusiva `DocVia API Render` criada na Conta Google com autenticação em duas etapas.
+- Credencial SMTP salva como segredo no Render e nunca adicionada ao repositório.
+- Autenticação SMTP validada e fluxo `/auth/forgot-password` confirmado com resposta 202.
+- Uma conta temporária com alias do proprietário foi usada para o envio e removida logo depois.
+
 ## Conta fictícia para revisão
 
 A conta de revisão foi criada diretamente em produção, com um contrato totalmente fictício. As credenciais não ficam versionadas no Git e devem ser inseridas apenas no campo **Acesso ao app** da Play Console.
-
