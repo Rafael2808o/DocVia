@@ -88,7 +88,14 @@ router.delete('/me', autenticarToken, validar(deleteAccountSchema), asyncHandler
     const cliente = await BD.connect();
     try {
         await cliente.query('BEGIN');
-        await cliente.query(`DELETE FROM jobs WHERE payload->>'userId' = $1 OR payload->>'documentId' IN (SELECT id::text FROM documents WHERE user_id = $1)`, [String(req.usuario.id_usuario)]);
+        await cliente.query(
+            `DELETE FROM jobs
+              WHERE payload->>'userId' = $1::text
+                 OR payload->>'documentId' IN (
+                     SELECT id::text FROM documents WHERE user_id = $1::uuid
+                 )`,
+            [req.usuario.id_usuario],
+        );
         await cliente.query('DELETE FROM login_security WHERE email = $1', [usuario.rows[0].email.toLowerCase()]);
         const resultado = await cliente.query('DELETE FROM users WHERE id = $1 RETURNING id', [req.usuario.id_usuario]);
         if (!resultado.rows[0]) throw new AppError('Usuário não encontrado', 404);
