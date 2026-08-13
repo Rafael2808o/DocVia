@@ -8,4 +8,7 @@ const apiUrl = (manifest.extra as { apiUrl?: string } | undefined)?.apiUrl || pr
 
 export const API_URL = apiUrl.replace(/\/+$/, '');
 
-export const API_TIMEOUT_MS = 20_000;
+// O Render gratuito pode levar cerca de 50 segundos para reativar a API após
+// um período sem uso. O limite maior evita um falso erro de conexão no
+// primeiro acesso; requisições normais continuam terminando imediatamente.
+export const API_TIMEOUT_MS = 75_000;
