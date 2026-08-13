@@ -57,11 +57,10 @@
 
 ## Recuperação de senha
 
-- Senha de app exclusiva `DocVia API Render` criada na Conta Google com autenticação em duas etapas.
-- Credencial SMTP salva como segredo no Render e nunca adicionada ao repositório.
+- Senha de app exclusiva `DocVia API Render` foi criada somente para o teste, nunca adicionada ao repositório e revogada depois que a limitação do Render foi confirmada.
 - Autenticação SMTP foi validada localmente, e o fluxo `/auth/forgot-password` respondeu 202 sem revelar se o endereço existe.
 - O envio em produção **não foi concluído**: o [Render Free bloqueia oficialmente as portas SMTP 25, 465 e 587](https://render.com/docs/free). Os logs confirmaram `ENETUNREACH`/`ETIMEDOUT`, e nenhum e-mail chegou à caixa de entrada.
-- Gmail API foi ativada no projeto Google Cloud e um cliente OAuth de teste foi criado, mas a última autorização da conta foi bloqueada pela política de segurança do navegador automatizado e não foi contornada.
+- Gmail API foi ativada no projeto Google Cloud e um cliente OAuth de teste foi criado, mas a última autorização da conta foi bloqueada pela política de segurança do navegador automatizado e não foi contornada. O cliente OAuth temporário foi excluído em seguida para não deixar uma credencial inutilizada ativa.
 - O backend já possui transporte HTTPS para Brevo e Resend. O caminho gratuito viável é concluir a conta Brevo, gerar uma chave e configurar `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` e o remetente no Render.
 - As contas temporárias usadas nos ensaios de SMTP foram removidas após os testes.
 

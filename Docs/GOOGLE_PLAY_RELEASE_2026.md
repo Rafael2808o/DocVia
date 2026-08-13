@@ -5,16 +5,16 @@
 - [x] Páginas de privacidade, termos e exclusão públicas no Cloudflare Pages.
 - [x] Supabase Free criado em São Paulo, schema aplicado e conexão real testada.
 - [x] SSL obrigatório, Data API desativada e papel exclusivo da API configurado.
-- [ ] Cloudflare R2, e-mail, provedor de IA e hospedagem HTTPS da API ainda
-  dependem de contas/credenciais externas e, em alguns casos, faturamento.
+- [x] Supabase Storage privado, Cloudflare Workers AI e API HTTPS no Render Free configurados e testados.
+- [ ] Recuperação por e-mail aguarda a ativação de um provedor HTTP gratuito; SMTP não funciona no Render Free.
 
 Detalhes e evidências do banco: `Docs/SUPABASE_PRODUCTION.md`.
 
-Atualizado em 7 de agosto de 2026.
+Atualizado em 13 de agosto de 2026.
 
 ## Estado objetivo
 
-**Decisão atual: NÃO PRONTO PARA PUBLICAR.** O código e a identidade estão preparados para staging, mas ainda não existe API pública configurada, AAB assinado, teste Android real nem aprovação pública das páginas legais. Nenhum desses itens pode ser validado apenas no repositório.
+**Decisão atual: NÃO PRONTO PARA PUBLICAÇÃO PÚBLICA.** Código, identidade, API, banco, armazenamento privado, IA, páginas legais e AAB assinado estão preparados e foram testados. Ainda faltam a entrega real do e-mail de recuperação, a conclusão paga/pessoal da conta Play Console, o teste em Android físico e o teste fechado obrigatório da Google.
 
 ## Identidade do aplicativo
 
@@ -75,89 +75,54 @@ As respostas finais devem refletir a infraestrutura realmente ativada, os contra
 |---|---:|---|---|
 | Nome | Sim | Gerenciamento da conta e funcionalidade | Informado no cadastro. |
 | E-mail | Sim | Conta, login, recuperação e suporte | Não usado para publicidade. |
-| Arquivos e documentos | Sim | Funcionalidade solicitada pelo usuário | Armazenamento deve ser privado no R2. |
+| Arquivos e documentos | Sim | Funcionalidade solicitada pelo usuário | Armazenamento privado no Supabase Storage; acesso mediado pela API autenticada. |
 | Conteúdo de texto | Sim | OCR e análise solicitada | Enviado ao provedor de IA; confirmar enquadramento como prestador de serviço e DPA. |
 | Atividade no app | Sim, limitada | Limite de análises, segurança e operação | Registro `analysis_created`; sem publicidade. |
-| Diagnósticos e metadados técnicos | Sim, limitados | Segurança, prevenção a fraude e estabilidade | Confirmar retenção dos logs do Cloud Run antes de preencher o formulário. |
+| Diagnósticos e metadados técnicos | Sim, limitados | Segurança, prevenção a fraude e estabilidade | Confirmar a retenção efetiva dos logs do Render antes de preencher o formulário. |
 | Dados financeiros | Não | — | Pagamentos desativados no lançamento. |
 | Saúde | Não no lançamento | — | Tipo `exame` removido da UI e recusado pela API. |
 | Fotos/vídeos da galeria | Não como acesso amplo | — | O seletor de arquivos do sistema entrega apenas o item escolhido. |
 | Localização, contatos, publicidade e rastreamento | Não | — | Não há SDK de anúncios/analytics no app atual. |
 
-Declarações que só podem ser marcadas depois do deploy e teste:
+Declarações confirmadas ou ainda condicionais:
 
-- dados criptografados em trânsito: **sim**, somente quando API e páginas usarem HTTPS;
-- solicitação de exclusão: **sim**, após tornar pública a página de exclusão e validar a remoção no banco e storage;
+- dados criptografados em trânsito: **sim**; API e páginas públicas usam HTTPS;
+- solicitação de exclusão: **sim**; página pública e exclusão no app foram testadas no banco e storage;
 - compartilhamento com terceiros: revisar o contrato do provedor de IA. Transferências a prestadores de serviço podem ter tratamento específico no formulário, mas não devem ser omitidas sem base contratual;
 - práticas de segurança independentes: não declarar auditoria/certificação que não foi realizada.
 
-## Infraestrutura de baixo custo preparada
+## Infraestrutura gratuita ativada
 
-### Supabase PostgreSQL
-
-1. Criar o projeto e escolher região apropriada.
-2. Executar `Docs/supabase-bootstrap.sql` no SQL Editor.
-3. Obter a connection string de servidor/pooler com SSL.
-4. Guardá-la no Secret Manager como `docvia-database-url`.
-5. Não expor a senha no app mobile nem usar as tabelas pela Data API.
-6. Testar backup e restauração antes de dados reais.
-
-### Cloudflare R2
-
-1. Criar bucket privado.
-2. Criar token limitado somente ao bucket.
-3. Preencher `R2_ACCOUNT_ID` e `R2_BUCKET` no ambiente.
-4. Guardar access key e secret key no Secret Manager.
-5. Não tornar o bucket público: downloads passam pela API autenticada.
-
-### API no Google Cloud Run
-
-1. Instalar Google Cloud CLI e entrar na conta.
-2. Criar projeto e vincular uma conta de faturamento, mesmo pretendendo ficar dentro da franquia gratuita.
-3. Criar os segredos listados em `Api/deploy/README.md`.
-4. Copiar `cloud-run.env.yaml.example` para `cloud-run.env.yaml` e preencher os valores restantes.
-5. Executar `Api/deploy/deploy-cloud-run.ps1 -ProjectId SEU_PROJETO`.
-6. Criar o Cloud Scheduler para `POST /internal/jobs/maintenance` sem expor `JOB_RUNNER_SECRET`.
-7. Definir alertas de orçamento. Franquia gratuita não é garantia de custo zero.
+- PostgreSQL: Supabase Free, região São Paulo, conexão SSL, papel `docvia_api`, RLS e Data API desativada.
+- Documentos: bucket privado `docvia-documents` no Supabase Storage, com limite de 10 MB e PDF/JPG/PNG.
+- API: Render Free em `https://docvia-api.onrender.com`, com health checks e segredos fora do Git.
+- IA: Cloudflare Workers AI, cota gratuita e trava global de 100 análises por dia.
+- Processamento: fila persistida no PostgreSQL e execução protegida por segredo interno.
+- Páginas legais: Cloudflare Pages em `https://docvia-privacidade.pages.dev`.
 
 ### E-mail e IA
 
-- Configurar remetente real no Resend, com domínio verificado, e testar recuperação de senha. Um endereço Gmail não pode simplesmente ser usado como domínio remetente de produção.
-- Ativar uma configuração do provedor de IA compatível com documentos pessoais, revisar termos/DPA e confirmar `AI_PAID_TIER_CONFIRMED=true` somente depois disso.
-- O limite global padrão de 250 análises por 24 horas é uma trava de custo, não um orçamento financeiro garantido.
+- Finalizar o cadastro gratuito no Brevo, gerar a chave HTTP e testar a recuperação de senha em produção. O backend já suporta `EMAIL_PROVIDER=brevo`.
+- Workers AI está ativo; revisar termos/DPA antes de aceitar documentos pessoais reais.
+- O limite global de 100 análises por 24 horas é uma trava operacional e não gera cobrança automática.
 
-## Geração do AAB
+## Builds Android concluídos
 
-O computador atual não tem Java 17+/Android SDK e não está autenticado no Expo. O caminho mais simples é EAS Build:
-
-```powershell
-cd "D:\Codes\Projeto Docvia\Mobile\DocVia"
-npx eas-cli login
-npx eas-cli build:configure
-$env:EXPO_PUBLIC_API_URL="https://SUA-API.run.app"
-npx eas-cli build --platform android --profile production
-```
-
-O ícone já foi aprovado e substituiu os assets Expo padrão. Antes do build, execute novamente:
-
-```powershell
-npm run lint
-npm run typecheck
-npx expo-doctor
-npx expo prebuild --platform android --no-install
-```
-
-O projeto atual gera target SDK 36, compatível com a exigência anunciada para novos apps a partir de 31 de agosto de 2026.
+- AAB de produção: `Builds/DocVia-1.0.0-1.aab`, build EAS `b9812c02-78be-484e-8b2e-7576626cb717`.
+- APK de teste interno: `Builds/DocVia-1.0.0-preview.apk`, build EAS `a3ec64c4-3c1b-48df-881e-d7512f80aa48`.
+- SDK Expo 57, target SDK 36, TypeScript/ESLint aprovados e Expo Doctor 20/20.
 
 ## Ordem segura de publicação
 
 - [x] Aprovar/aplicar a nova identidade visual e exportar ícone Play 512 × 512, ícones adaptativos e feature graphic 1024 × 500.
 - [ ] Aprovar visualmente a composição final da feature graphic antes do upload.
-- [ ] Tornar públicas e testar as páginas de privacidade, termos e exclusão.
-- [ ] Configurar Supabase, R2, e-mail, IA e segredos.
-- [ ] Publicar a API e validar `/health/live` e `/health/ready`.
-- [ ] Testar cadastro, recuperação, login, texto, PDF, câmera, OCR, prazos, notificações, exportação e exclusão com dados sintéticos.
-- [ ] Gerar AAB de produção e conferir permissões no App Bundle Explorer.
+- [x] Tornar públicas e testar as páginas de privacidade, termos e exclusão.
+- [x] Configurar Supabase, storage privado, IA e segredos.
+- [ ] Concluir e testar a recuperação por e-mail via API HTTP.
+- [x] Publicar a API e validar `/health/live` e `/health/ready`.
+- [x] Testar cadastro, login, texto, PDF, OCR, prazos, exportação e exclusão com dados sintéticos.
+- [x] Gerar AAB de produção assinado.
+- [ ] Conferir permissões no App Bundle Explorer após criar o app na Play Console.
 - [ ] Criar ficha, política, Data Safety, classificação indicativa, público-alvo e declarações de conteúdo no Play Console.
 - [ ] Fazer teste interno em Android 13 e Android 16 ou versões mais recentes disponíveis.
 - [ ] Se a conta pessoal foi criada após 13/11/2023, manter pelo menos 12 testadores inscritos no teste fechado por 14 dias contínuos.
