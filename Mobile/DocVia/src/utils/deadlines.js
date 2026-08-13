@@ -39,6 +39,8 @@ export function deadlineDate(item, now = new Date()) {
   const raw = typeof item === 'string' ? item : item?.due_date || item?.data || item?.date || deadlineDescription(item);
   if (typeof item === 'object' && String(item?.recorrencia || item?.recurrence || '').toLowerCase() === 'mensal') {
     const parsed = extractDueDate(raw, now);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (parsed && localDate(parsed) >= today) return parsed;
     const dayFromDate = parsed ? Number(parsed.slice(8, 10)) : null;
     const dayFromText = Number(String(deadlineDescription(item)).match(/\b(?:todo\s+)?dia\s+([1-9]|[12]\d|3[01])\b/i)?.[1] || 0);
     const day = dayFromText || dayFromDate;
