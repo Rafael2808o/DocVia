@@ -51,6 +51,7 @@ test('liveness não depende do banco', async () => {
     const resposta = await request(app).get('/health/live');
     assert.equal(resposta.status, 200);
     assert.equal(resposta.body.status, 'ok');
+    assert.equal(resposta.headers['cache-control'], 'private, no-store');
 });
 
 test('executor interno rejeita requisições sem o segredo', async () => {

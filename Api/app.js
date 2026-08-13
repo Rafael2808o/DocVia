@@ -43,6 +43,14 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
+// A API devolve dados pessoais e estados que mudam durante o processamento.
+// Impede que CDNs/proxies compartilhem ou retenham respostas autenticadas e
+// evita que um 404 transitório durante um deploy fique armazenado no edge.
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'private, no-store');
+    next();
+});
+
 app.get('/health/live', (req, res) => res.status(200).json({ status: 'ok', version: env.API_VERSION }));
 app.get('/health/ready', async (req, res) => {
     try {
