@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "DocVia",
-    "slug": "DocVia",
+    "slug": "docvia",
+    "owner": "docvia-app",
     "description": "Organize documentos, identifique prazos e entenda pontos importantes com apoio de inteligência artificial.",
     "version": "1.0.0",
     "scheme": "docvia",
@@ -36,6 +37,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "69768ee3-f138-4da2-8bda-1a63ac1aa8e5"
+      }
     },
     "plugins": [
       "expo-secure-store",
