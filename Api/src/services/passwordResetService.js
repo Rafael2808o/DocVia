@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { resolve4 } from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 import { BD } from '../../db.js';
 import { env } from '../../config/env.js';
@@ -34,11 +35,14 @@ export async function enviarEmailRedefinicao(email, token) {
     const html = `<p>Use este link em até 15 minutos:</p><p><a href="${link.toString()}">Redefinir senha</a></p>`;
     let resposta;
     if (env.EMAIL_PROVIDER === 'smtp') {
+        const [smtpIpv4] = await resolve4(env.SMTP_HOST);
+        if (!smtpIpv4) throw new AppError('O servidor SMTP não possui endereço IPv4 disponível', 503);
         const transporter = nodemailer.createTransport({
-            host: env.SMTP_HOST,
+            host: smtpIpv4,
             port: env.SMTP_PORT,
             secure: env.SMTP_SECURE,
             auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
+            tls: { servername: env.SMTP_HOST },
             connectionTimeout: 10_000,
             greetingTimeout: 10_000,
             socketTimeout: 20_000,
