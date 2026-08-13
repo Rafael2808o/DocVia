@@ -13,3 +13,6 @@ android/
 *.key
 *.mobileprovision
 *.tsbuildinfo
+**/*.aab
+**/*.apk
+**/*.log
