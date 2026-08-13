@@ -158,9 +158,14 @@ router.get('/deadlines/upcoming', autenticarToken, asyncHandler(async (req, res)
 router.get('/jobs/:jobId', autenticarToken, validarUuidParam('jobId'), asyncHandler(async (req, res) => {
     const resultado = await BD.query(
         `SELECT id, type, status, attempts, max_attempts, created_at, completed_at, last_error
-           FROM jobs
+          FROM jobs
           WHERE id = $1
-            AND (payload->>'userId' = $2 OR payload->>'documentId' IN (SELECT id::text FROM documents WHERE user_id = $2))`,
+            AND (
+                payload->>'userId' = $2::text
+                OR payload->>'documentId' IN (
+                    SELECT id::text FROM documents WHERE user_id = $2::uuid
+                )
+            )`,
         [req.params.jobId, req.usuario.id_usuario]
     );
     if (!resultado.rows[0]) throw new AppError('Job não encontrado', 404);
