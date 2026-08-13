@@ -38,7 +38,17 @@ services:
         value: https://docvia-privacidade.pages.dev/excluir-conta/
       - key: PASSWORD_RESET_URL
         value: docvia://reset-password
-      - key: RESEND_API_KEY
+      - key: EMAIL_PROVIDER
+        value: smtp
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_SECURE
+        value: true
+      - key: SMTP_USER
+        value: zrafaelxd07@gmail.com
+      - key: SMTP_PASSWORD
         sync: false
       - key: MAIL_FROM
         sync: false

@@ -38,7 +38,14 @@ const ambienteSchema = z.object({
     PAYMENT_PROVIDER: z.enum(['none', 'stripe']).default('none'),
     STRIPE_SECRET_KEY: textoOpcional,
     STRIPE_WEBHOOK_SECRET: textoOpcional,
+    EMAIL_PROVIDER: z.enum(['resend', 'brevo', 'smtp']).default('resend'),
     RESEND_API_KEY: textoOpcional,
+    BREVO_API_KEY: textoOpcional,
+    SMTP_HOST: z.string().default('smtp.gmail.com'),
+    SMTP_PORT: z.coerce.number().int().positive().max(65535).default(465),
+    SMTP_SECURE: z.enum(['true', 'false']).default('true').transform((valor) => valor === 'true'),
+    SMTP_USER: emailOpcional,
+    SMTP_PASSWORD: textoOpcional,
     MAIL_FROM: remetenteOpcional,
     PASSWORD_RESET_URL: z.string().url().optional(),
     PRIVACY_CONTACT_EMAIL: emailOpcional,
@@ -98,8 +105,15 @@ const ambienteSchema = z.object({
             if (!valor || !valor.startsWith('https://')) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório e precisa usar HTTPS em produção' });
         }
         if (!configuracao.PRIVACY_CONTACT_EMAIL) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['PRIVACY_CONTACT_EMAIL'], message: 'é obrigatório em produção' });
-        for (const [campo, valor] of [['RESEND_API_KEY', configuracao.RESEND_API_KEY], ['MAIL_FROM', configuracao.MAIL_FROM], ['PASSWORD_RESET_URL', configuracao.PASSWORD_RESET_URL]]) {
+        for (const [campo, valor] of [['MAIL_FROM', configuracao.MAIL_FROM], ['PASSWORD_RESET_URL', configuracao.PASSWORD_RESET_URL]]) {
             if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório em produção porque a recuperação de senha está disponível no app' });
+        }
+        if (configuracao.EMAIL_PROVIDER === 'resend' && !configuracao.RESEND_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'é obrigatória quando EMAIL_PROVIDER=resend' });
+        if (configuracao.EMAIL_PROVIDER === 'brevo' && !configuracao.BREVO_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['BREVO_API_KEY'], message: 'é obrigatória quando EMAIL_PROVIDER=brevo' });
+        if (configuracao.EMAIL_PROVIDER === 'smtp') {
+            for (const [campo, valor] of [['SMTP_USER', configuracao.SMTP_USER], ['SMTP_PASSWORD', configuracao.SMTP_PASSWORD]]) {
+                if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando EMAIL_PROVIDER=smtp' });
+            }
         }
         if (configuracao.AI_PROVIDER === 'gemini' && !configuracao.GEMINI_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['GEMINI_API_KEY'], message: 'é obrigatória quando AI_PROVIDER=gemini' });
         if (configuracao.AI_PROVIDER === 'openai' && !configuracao.OPENAI_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['OPENAI_API_KEY'], message: 'é obrigatória quando AI_PROVIDER=openai' });

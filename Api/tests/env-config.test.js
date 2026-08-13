@@ -71,6 +71,11 @@ test('configuração de produção aceita Render, Supabase Storage S3 e Workers 
         GCP_PROJECT_ID: '',
         CLOUD_RUN_SERVICE_URL: '',
         JOB_RUNNER_SECRET: '',
+        EMAIL_PROVIDER: 'smtp',
+        RESEND_API_KEY: '',
+        BREVO_API_KEY: '',
+        SMTP_USER: 'zrafaelxd07@gmail.com',
+        SMTP_PASSWORD: 'senha-de-app-de-teste',
     };
     const { stdout } = await execFileAsync(
         process.execPath,

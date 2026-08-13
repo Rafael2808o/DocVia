@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import nodemailer from 'nodemailer';
 import { BD } from '../../db.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/erros.js';
@@ -22,15 +23,49 @@ export async function consumirTokenRedefinicao(token, cliente = BD) {
 }
 
 export async function enviarEmailRedefinicao(email, token) {
-    if (!env.RESEND_API_KEY || !env.MAIL_FROM || !env.PASSWORD_RESET_URL) {
+    const providerKey = env.EMAIL_PROVIDER === 'smtp'
+        ? env.SMTP_PASSWORD
+        : env.EMAIL_PROVIDER === 'brevo' ? env.BREVO_API_KEY : env.RESEND_API_KEY;
+    if (!providerKey || !env.MAIL_FROM || !env.PASSWORD_RESET_URL) {
         throw new AppError('Recuperação por e-mail ainda não está configurada', 503);
     }
     const link = new URL(env.PASSWORD_RESET_URL);
     link.searchParams.set('token', token);
-    const resposta = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: env.MAIL_FROM, to: [email], subject: 'Redefina sua senha DocVia', html: `<p>Use este link em até 15 minutos:</p><p><a href="${link.toString()}">Redefinir senha</a></p>` }),
-    });
+    const html = `<p>Use este link em até 15 minutos:</p><p><a href="${link.toString()}">Redefinir senha</a></p>`;
+    let resposta;
+    if (env.EMAIL_PROVIDER === 'smtp') {
+        const transporter = nodemailer.createTransport({
+            host: env.SMTP_HOST,
+            port: env.SMTP_PORT,
+            secure: env.SMTP_SECURE,
+            auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
+            connectionTimeout: 10_000,
+            greetingTimeout: 10_000,
+            socketTimeout: 20_000,
+        });
+        await transporter.sendMail({
+            from: env.MAIL_FROM,
+            to: email,
+            subject: 'Redefina sua senha DocVia',
+            text: `Use este link em até 15 minutos: ${link.toString()}`,
+            html,
+        });
+        return;
+    }
+    if (env.EMAIL_PROVIDER === 'brevo') {
+        const correspondencia = env.MAIL_FROM.match(/^(.*?)\s*<([^<>]+)>\s*$/);
+        const sender = correspondencia ? { name: correspondencia[1].trim(), email: correspondencia[2] } : { email: env.MAIL_FROM };
+        resposta = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ sender, to: [{ email }], subject: 'Redefina sua senha DocVia', htmlContent: html }),
+        });
+    } else {
+        resposta = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: env.MAIL_FROM, to: [email], subject: 'Redefina sua senha DocVia', html }),
+        });
+    }
     if (!resposta.ok) throw new AppError('Não foi possível enviar o e-mail de recuperação', 502);
 }
