@@ -12,20 +12,35 @@ const MIME_EXTENSOES = {
     'image/png': '.png',
 };
 
-let clienteR2;
+let clienteObjetos;
 
-function obterClienteR2() {
-    if (!clienteR2) {
-        clienteR2 = new S3Client({
+function configuracaoObjetos() {
+    if (env.STORAGE_PROVIDER === 's3') {
+        return {
+            bucket: env.S3_BUCKET,
+            scheme: 's3',
+            client: {
+                region: env.S3_REGION,
+                endpoint: env.S3_ENDPOINT,
+                forcePathStyle: env.S3_FORCE_PATH_STYLE,
+                credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
+            },
+        };
+    }
+    return {
+        bucket: env.R2_BUCKET,
+        scheme: 'r2',
+        client: {
             region: 'auto',
             endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-            credentials: {
-                accessKeyId: env.R2_ACCESS_KEY_ID,
-                secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-            },
-        });
-    }
-    return clienteR2;
+            credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+        },
+    };
+}
+
+function obterClienteObjetos() {
+    if (!clienteObjetos) clienteObjetos = new S3Client(configuracaoObjetos().client);
+    return clienteObjetos;
 }
 
 function arquivoCorrespondeAoMime(file) {
@@ -49,12 +64,13 @@ function criarChave(extensao) {
     return `documents/${agora.getUTCFullYear()}/${String(agora.getUTCMonth() + 1).padStart(2, '0')}/${crypto.randomUUID()}${extensao}`;
 }
 
-function chaveR2DaReferencia(referencia) {
+function chaveObjetoDaReferencia(referencia) {
     if (!referencia) return null;
-    if (!String(referencia).startsWith('r2://')) return null;
+    const { bucket, scheme } = configuracaoObjetos();
+    if (!String(referencia).startsWith(`${scheme}://`)) return null;
     try {
         const url = new URL(referencia);
-        if (url.hostname !== env.R2_BUCKET) return null;
+        if (url.hostname !== bucket) return null;
         return decodeURIComponent(url.pathname.replace(/^\/+/, '')) || null;
     } catch {
         return null;
@@ -96,16 +112,17 @@ export async function salvarArquivo(file) {
     }
 
     const chave = criarChave(extensao);
-    if (env.STORAGE_PROVIDER === 'r2') {
-        await obterClienteR2().send(new PutObjectCommand({
-            Bucket: env.R2_BUCKET,
+    if (env.STORAGE_PROVIDER !== 'local') {
+        const { bucket, scheme } = configuracaoObjetos();
+        await obterClienteObjetos().send(new PutObjectCommand({
+            Bucket: bucket,
             Key: chave,
             Body: file.buffer,
             ContentType: file.mimetype,
             CacheControl: 'private, no-store',
             Metadata: { source: 'docvia-api' },
         }));
-        return { caminho: chave, url: `r2://${env.R2_BUCKET}/${chave}` };
+        return { caminho: chave, url: `${scheme}://${bucket}/${chave}` };
     }
 
     await mkdir(env.STORAGE_DIR, { recursive: true });
@@ -117,9 +134,9 @@ export async function salvarArquivo(file) {
 
 export async function removerArquivo(referencia) {
     if (!referencia || referencia === 'text://manual-entry') return;
-    const chaveR2 = chaveR2DaReferencia(referencia) || (env.STORAGE_PROVIDER === 'r2' && !path.isAbsolute(referencia) ? referencia : null);
-    if (chaveR2) {
-        await obterClienteR2().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: chaveR2 }));
+    const chaveObjeto = chaveObjetoDaReferencia(referencia) || (env.STORAGE_PROVIDER !== 'local' && !path.isAbsolute(referencia) ? referencia : null);
+    if (chaveObjeto) {
+        await obterClienteObjetos().send(new DeleteObjectCommand({ Bucket: configuracaoObjetos().bucket, Key: chaveObjeto }));
         return;
     }
     const alvo = caminhoLocalSeguro(referencia);
@@ -129,8 +146,8 @@ export async function removerArquivo(referencia) {
 }
 
 export function nomeArquivoDaUrl(url) {
-    const chaveR2 = chaveR2DaReferencia(url);
-    if (chaveR2) return chaveR2;
+    const chaveObjeto = chaveObjetoDaReferencia(url);
+    if (chaveObjeto) return chaveObjeto;
     try {
         const pathname = decodeURIComponent(new URL(url, 'http://local').pathname);
         const prefixo = `/${String(env.STORAGE_PUBLIC_URL).replace(/^\/+|\/+$/g, '')}/`;
@@ -142,10 +159,10 @@ export function nomeArquivoDaUrl(url) {
 }
 
 export async function lerArquivoPorUrl(url) {
-    const chaveR2 = chaveR2DaReferencia(url);
-    if (chaveR2) {
+    const chaveObjeto = chaveObjetoDaReferencia(url);
+    if (chaveObjeto) {
         try {
-            const resposta = await obterClienteR2().send(new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: chaveR2 }));
+            const resposta = await obterClienteObjetos().send(new GetObjectCommand({ Bucket: configuracaoObjetos().bucket, Key: chaveObjeto }));
             if (!resposta.Body) throw new AppError('Arquivo do documento não encontrado', 404);
             return Buffer.from(await resposta.Body.transformToByteArray());
         } catch (erro) {

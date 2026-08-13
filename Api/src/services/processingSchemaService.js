@@ -27,7 +27,12 @@ export async function verificarSchemaProcessamento() {
             to_regclass('public.users') IS NOT NULL AS users,
             to_regclass('public.documents') IS NOT NULL AS documents,
             to_regclass('public.analyses') IS NOT NULL AS analyses,
+            to_regclass('public.usage_logs') IS NOT NULL AS usage_logs,
+            to_regclass('public.subscriptions') IS NOT NULL AS subscriptions,
+            to_regclass('public.refresh_tokens') IS NOT NULL AS refresh_tokens,
             to_regclass('public.jobs') IS NOT NULL AS jobs,
+            to_regclass('public.login_security') IS NOT NULL AS login_security,
+            to_regclass('public.document_deadlines') IS NOT NULL AS document_deadlines,
             to_regclass('public.password_reset_tokens') IS NOT NULL AS password_reset_tokens,
             EXISTS (
                 SELECT 1 FROM information_schema.columns

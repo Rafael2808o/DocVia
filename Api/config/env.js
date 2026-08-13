@@ -22,15 +22,19 @@ const ambienteSchema = z.object({
     DB_PORT: z.coerce.number().int().positive().default(5432),
     DB_SSL: z.enum(['true', 'false']).default('false').transform((valor) => valor === 'true'),
     DB_SSL_REJECT_UNAUTHORIZED: z.enum(['true', 'false']).default('true').transform((valor) => valor === 'true'),
+    DB_SSL_CA_FILE: textoOpcional,
     DATABASE_URL: urlOpcional,
     DB_POOL_MAX: z.coerce.number().int().positive().max(50).default(10),
     DB_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
     DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET precisa ter pelo menos 32 caracteres'),
-    AI_PROVIDER: z.enum(['gemini', 'openai']).default('gemini'),
+    AI_PROVIDER: z.enum(['gemini', 'openai', 'cloudflare']).default('gemini'),
     GEMINI_API_KEY: textoOpcional,
     GEMINI_MODEL: z.string().default('gemini-2.5-flash-lite'),
     OPENAI_API_KEY: textoOpcional,
+    CLOUDFLARE_ACCOUNT_ID: textoOpcional,
+    CLOUDFLARE_AI_API_TOKEN: textoOpcional,
+    CLOUDFLARE_AI_MODEL: z.string().default('@cf/meta/llama-3.1-8b-instruct-fast'),
     PAYMENT_PROVIDER: z.enum(['none', 'stripe']).default('none'),
     STRIPE_SECRET_KEY: textoOpcional,
     STRIPE_WEBHOOK_SECRET: textoOpcional,
@@ -53,21 +57,28 @@ const ambienteSchema = z.object({
     AI_MAX_TEXT_CHARS: z.coerce.number().int().positive().default(120_000),
     AI_TIMEOUT_MS: z.coerce.number().int().positive().max(300_000).default(60_000),
     AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(16_384).default(4_096),
-    AI_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().max(100_000).default(250),
+    AI_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().max(100_000).default(100),
     AI_PAID_TIER_CONFIRMED: z.enum(['true', 'false']).default('false').transform((valor) => valor === 'true'),
+    AI_PRIVACY_CONFIRMED: z.enum(['true', 'false']).default('false').transform((valor) => valor === 'true'),
     SENSITIVE_DOCUMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform((valor) => valor === 'true'),
     JOB_MODE: z.enum(['worker', 'cloud-tasks']).default('worker'),
     GCP_PROJECT_ID: textoOpcional,
     GCP_LOCATION: z.string().default('southamerica-east1'),
     CLOUD_TASKS_QUEUE: z.string().default('docvia-document-processing'),
-    CLOUD_RUN_SERVICE_URL: z.string().url().optional(),
+    CLOUD_RUN_SERVICE_URL: urlOpcional,
     JOB_RUNNER_SECRET: opcional(z.string().min(32)),
     AUTO_MIGRATE: z.enum(['true', 'false']).default('true').transform((valor) => valor === 'true'),
-    STORAGE_PROVIDER: z.enum(['local', 'r2']).default('local'),
+    STORAGE_PROVIDER: z.enum(['local', 'r2', 's3']).default('local'),
     R2_ACCOUNT_ID: textoOpcional,
     R2_ACCESS_KEY_ID: textoOpcional,
     R2_SECRET_ACCESS_KEY: textoOpcional,
     R2_BUCKET: textoOpcional,
+    S3_ENDPOINT: urlOpcional,
+    S3_REGION: textoOpcional,
+    S3_ACCESS_KEY_ID: textoOpcional,
+    S3_SECRET_ACCESS_KEY: textoOpcional,
+    S3_BUCKET: textoOpcional,
+    S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('true').transform((valor) => valor === 'true'),
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
@@ -92,15 +103,28 @@ const ambienteSchema = z.object({
         }
         if (configuracao.AI_PROVIDER === 'gemini' && !configuracao.GEMINI_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['GEMINI_API_KEY'], message: 'é obrigatória quando AI_PROVIDER=gemini' });
         if (configuracao.AI_PROVIDER === 'openai' && !configuracao.OPENAI_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['OPENAI_API_KEY'], message: 'é obrigatória quando AI_PROVIDER=openai' });
-        if (!configuracao.AI_PAID_TIER_CONFIRMED) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['AI_PAID_TIER_CONFIRMED'], message: 'confirme o plano de IA com proteção de dados antes de processar documentos reais' });
-        if (configuracao.STORAGE_PROVIDER !== 'r2') contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['STORAGE_PROVIDER'], message: 'em produção use armazenamento privado R2; disco local é efêmero' });
-        for (const [campo, valor] of [['R2_ACCOUNT_ID', configuracao.R2_ACCOUNT_ID], ['R2_ACCESS_KEY_ID', configuracao.R2_ACCESS_KEY_ID], ['R2_SECRET_ACCESS_KEY', configuracao.R2_SECRET_ACCESS_KEY], ['R2_BUCKET', configuracao.R2_BUCKET]]) {
-            if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando STORAGE_PROVIDER=r2' });
+        if (configuracao.AI_PROVIDER === 'cloudflare') {
+            for (const [campo, valor] of [['CLOUDFLARE_ACCOUNT_ID', configuracao.CLOUDFLARE_ACCOUNT_ID], ['CLOUDFLARE_AI_API_TOKEN', configuracao.CLOUDFLARE_AI_API_TOKEN]]) {
+                if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando AI_PROVIDER=cloudflare' });
+            }
         }
-        if (configuracao.JOB_MODE !== 'cloud-tasks') contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['JOB_MODE'], message: 'use cloud-tasks no Cloud Run para garantir processamento após a resposta HTTP' });
+        if (!configuracao.AI_PRIVACY_CONFIRMED && !configuracao.AI_PAID_TIER_CONFIRMED) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['AI_PRIVACY_CONFIRMED'], message: 'confirme que o provedor de IA não usa documentos reais para treinamento' });
+        if (configuracao.STORAGE_PROVIDER === 'local') contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['STORAGE_PROVIDER'], message: 'em produção use armazenamento de objetos privado; disco local é efêmero' });
+        if (configuracao.STORAGE_PROVIDER === 'r2') {
+            for (const [campo, valor] of [['R2_ACCOUNT_ID', configuracao.R2_ACCOUNT_ID], ['R2_ACCESS_KEY_ID', configuracao.R2_ACCESS_KEY_ID], ['R2_SECRET_ACCESS_KEY', configuracao.R2_SECRET_ACCESS_KEY], ['R2_BUCKET', configuracao.R2_BUCKET]]) {
+                if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando STORAGE_PROVIDER=r2' });
+            }
+        }
+        if (configuracao.STORAGE_PROVIDER === 's3') {
+            for (const [campo, valor] of [['S3_ENDPOINT', configuracao.S3_ENDPOINT], ['S3_REGION', configuracao.S3_REGION], ['S3_ACCESS_KEY_ID', configuracao.S3_ACCESS_KEY_ID], ['S3_SECRET_ACCESS_KEY', configuracao.S3_SECRET_ACCESS_KEY], ['S3_BUCKET', configuracao.S3_BUCKET]]) {
+                if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando STORAGE_PROVIDER=s3' });
+            }
+        }
         if (configuracao.AUTO_MIGRATE) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTO_MIGRATE'], message: 'desative DDL automático em produção e aplique o bootstrap antes do deploy' });
-        for (const [campo, valor] of [['GCP_PROJECT_ID', configuracao.GCP_PROJECT_ID], ['CLOUD_RUN_SERVICE_URL', configuracao.CLOUD_RUN_SERVICE_URL], ['JOB_RUNNER_SECRET', configuracao.JOB_RUNNER_SECRET]]) {
-            if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando JOB_MODE=cloud-tasks' });
+        if (configuracao.JOB_MODE === 'cloud-tasks') {
+            for (const [campo, valor] of [['GCP_PROJECT_ID', configuracao.GCP_PROJECT_ID], ['CLOUD_RUN_SERVICE_URL', configuracao.CLOUD_RUN_SERVICE_URL], ['JOB_RUNNER_SECRET', configuracao.JOB_RUNNER_SECRET]]) {
+                if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório quando JOB_MODE=cloud-tasks' });
+            }
         }
     }
 });
@@ -116,6 +140,10 @@ export const env = resultado.data;
 
 export function temOpenAiConfigurada() {
     return Boolean(env.OPENAI_API_KEY && !env.OPENAI_API_KEY.startsWith('sk-sua-'));
+}
+
+export function temCloudflareAiConfigurada() {
+    return Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_AI_API_TOKEN);
 }
 
 export function temGeminiConfigurada() {

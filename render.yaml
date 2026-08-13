@@ -1,0 +1,84 @@
+services:
+  - type: web
+    name: docvia-api
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: codex/play-store-release
+    dockerfilePath: ./Api/Dockerfile
+    dockerContext: ./Api
+    healthCheckPath: /health/ready
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_VERSION
+        value: 1.0.0
+      - key: API_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_REJECT_UNAUTHORIZED
+        value: "true"
+      - key: DB_SSL_CA_FILE
+        value: ./config/certs/supabase-prod-ca-2021.crt
+      - key: DB_POOL_MAX
+        value: "3"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://docvia-privacidade.pages.dev
+      - key: PRIVACY_CONTACT_EMAIL
+        value: zrafaelxd07@gmail.com
+      - key: PRIVACY_POLICY_URL
+        value: https://docvia-privacidade.pages.dev/privacidade/
+      - key: ACCOUNT_DELETION_URL
+        value: https://docvia-privacidade.pages.dev/excluir-conta/
+      - key: PASSWORD_RESET_URL
+        value: docvia://reset-password
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: PAYMENT_PROVIDER
+        value: none
+      - key: AI_PROVIDER
+        value: cloudflare
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_AI_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_AI_MODEL
+        value: "@cf/meta/llama-3.1-8b-instruct-fast"
+      - key: AI_PRIVACY_CONFIRMED
+        value: "true"
+      - key: AI_GLOBAL_DAILY_LIMIT
+        value: "100"
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "4096"
+      - key: SENSITIVE_DOCUMENTS_ENABLED
+        value: "false"
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: sa-east-1
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: docvia-documents
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+      - key: JOB_MODE
+        value: worker
+      - key: AUTO_MIGRATE
+        value: "false"
+      - key: OCR_ENABLED
+        value: "true"
+      - key: OCR_LANGUAGE
+        value: por

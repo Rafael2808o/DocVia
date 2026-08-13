@@ -1,5 +1,15 @@
 # Pacote de lançamento Google Play — DocVia
 
+## Atualização de infraestrutura — 13 de agosto de 2026
+
+- [x] Páginas de privacidade, termos e exclusão públicas no Cloudflare Pages.
+- [x] Supabase Free criado em São Paulo, schema aplicado e conexão real testada.
+- [x] SSL obrigatório, Data API desativada e papel exclusivo da API configurado.
+- [ ] Cloudflare R2, e-mail, provedor de IA e hospedagem HTTPS da API ainda
+  dependem de contas/credenciais externas e, em alguns casos, faturamento.
+
+Detalhes e evidências do banco: `Docs/SUPABASE_PRODUCTION.md`.
+
 Atualizado em 7 de agosto de 2026.
 
 ## Estado objetivo

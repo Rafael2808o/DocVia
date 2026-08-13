@@ -5,7 +5,7 @@ const PLAN_DETAILS = {
         id: 'free',
         name: 'Plano Gratuito',
         monthly_cost: 0,
-        daily_analysis_limit: 5,
+        daily_analysis_limit: 3,
         description: 'Teste o app com recursos básicos de análise e limite diário.',
         features: [
             'Análises básicas',
@@ -17,7 +17,7 @@ const PLAN_DETAILS = {
         id: 'premium',
         name: 'Plano Premium',
         monthly_cost: 19.9,
-        daily_analysis_limit: 100,
+        daily_analysis_limit: 3,
         description: 'Acesso ampliado a análises, histórico completo e recursos avançados.',
         features: [
             'Histórico ilimitado',

@@ -69,7 +69,7 @@ $secretMappings = @(
     'JOB_RUNNER_SECRET=docvia-job-runner-secret:latest'
 ) -join ','
 
-gcloud run deploy $Service --image $image --region $Region --service-account $runtimeServiceAccount --allow-unauthenticated --port 8080 --memory 1Gi --cpu 1 --concurrency 4 --timeout 300 --max-instances 3 --min-instances 0 --env-vars-file $EnvFile --set-secrets $secretMappings --quiet
+gcloud run deploy $Service --image $image --region $Region --service-account $runtimeServiceAccount --allow-unauthenticated --port 8080 --memory 1Gi --cpu 1 --concurrency 4 --timeout 300 --max-instances 1 --min-instances 0 --env-vars-file $EnvFile --set-secrets $secretMappings --quiet
 
 $serviceUrl = gcloud run services describe $Service --region $Region --format 'value(status.url)'
 if (-not $serviceUrl) { throw 'Não foi possível obter o endereço do serviço.' }

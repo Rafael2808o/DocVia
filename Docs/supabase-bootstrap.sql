@@ -7,6 +7,9 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Somente papeis explicitamente autorizados podem criar objetos no schema.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL,
@@ -167,11 +170,35 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
         REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+        REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM anon;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
         REVOKE ALL ON ALL TABLES IN SCHEMA public FROM authenticated;
         REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
+        REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM authenticated;
     END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM service_role;
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM service_role;
+        REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM service_role;
+    END IF;
+END $$;
+
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+DO $$
+DECLARE
+    data_api_role TEXT;
+BEGIN
+    FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+    LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+            EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM %I', data_api_role);
+            EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', data_api_role);
+            EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM %I', data_api_role);
+        END IF;
+    END LOOP;
 END $$;
 
 COMMIT;

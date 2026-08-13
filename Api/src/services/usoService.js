@@ -2,8 +2,8 @@ import { BD } from '../../db.js';
 import { env } from '../../config/env.js';
 
 const LIMITES_POR_PLANO = {
-    free: 5,
-    premium: 100,
+    free: 3,
+    premium: 3,
 };
 
 // Verifica se o usuário ainda pode fazer uma análise hoje, de acordo com o plano dele.

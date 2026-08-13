@@ -1,6 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
+
+function configuracaoSsl() {
+    if (!env.DB_SSL) return false;
+
+    return {
+        rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED,
+        ...(env.DB_SSL_CA_FILE
+            ? { ca: readFileSync(env.DB_SSL_CA_FILE, 'utf8') }
+            : {}),
+    };
+}
 
 // IMPORTANTE: precisa do "export" aqui na frente, senão as outras
 // rotas (auth.js, documents.js...) não conseguem importar o BD.
@@ -12,7 +24,7 @@ export const BD = new Pool({
         database: env.DB_NAME,
         port: env.DB_PORT,
     }),
-    ssl: env.DB_SSL ? { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED } : false,
+    ssl: configuracaoSsl(),
     max: env.DB_POOL_MAX,
     idleTimeoutMillis: env.DB_IDLE_TIMEOUT_MS,
     connectionTimeoutMillis: env.DB_CONNECTION_TIMEOUT_MS,
