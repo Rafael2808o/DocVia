@@ -1,6 +1,7 @@
 import { mkdir, unlink, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { inflateSync } from 'node:zlib';
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/erros.js';
@@ -43,7 +44,37 @@ function obterClienteObjetos() {
     return clienteObjetos;
 }
 
-function arquivoCorrespondeAoMime(file) {
+function pngValido(buffer) {
+    if (buffer.length < 33 || !buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return false;
+    let offset = 8;
+    let encontrouCabecalho = false;
+    let encontrouFim = false;
+    const dadosCompactados = [];
+
+    try {
+        while (offset + 12 <= buffer.length) {
+            const tamanho = buffer.readUInt32BE(offset);
+            const tipo = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+            const inicioDados = offset + 8;
+            const fimDados = inicioDados + tamanho;
+            if (fimDados + 4 > buffer.length) return false;
+            if (tipo === 'IHDR') encontrouCabecalho = tamanho === 13;
+            if (tipo === 'IDAT') dadosCompactados.push(buffer.subarray(inicioDados, fimDados));
+            if (tipo === 'IEND') {
+                encontrouFim = tamanho === 0;
+                break;
+            }
+            offset = fimDados + 4;
+        }
+        if (!encontrouCabecalho || !encontrouFim || dadosCompactados.length === 0) return false;
+        inflateSync(Buffer.concat(dadosCompactados));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export function arquivoCorrespondeAoMime(file) {
     const buffer = file.buffer;
     if (!Buffer.isBuffer(buffer) || buffer.length < 4) return false;
 
@@ -51,7 +82,7 @@ function arquivoCorrespondeAoMime(file) {
         return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
     }
     if (file.mimetype === 'image/png') {
-        return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+        return pngValido(buffer);
     }
     if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
         return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;

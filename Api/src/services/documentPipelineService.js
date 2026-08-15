@@ -2,7 +2,7 @@ import { BD } from '../../db.js';
 import { AppError } from '../../utils/erros.js';
 import { extrairTexto } from './documentTextService.js';
 import { analisarDocumentoComIA } from './aiAnalysisV2Service.js';
-import { lerArquivoPorUrl } from './storageService.js';
+import { arquivoCorrespondeAoMime, lerArquivoPorUrl } from './storageService.js';
 import { reservarUsoNaTransacao } from './usoService.js';
 import { enfileirarJobUnico } from './jobService.js';
 import { logger } from '../../config/logger.js';
@@ -21,6 +21,9 @@ export async function extrairTextoDoDocumento({ documentId }) {
     try {
         logger.info({ documentId, mime: documento.mime_type, storageUrl: documento.storage_url }, 'Iniciando extração de documento');
         const buffer = await lerArquivoPorUrl(documento.storage_url);
+        if (!arquivoCorrespondeAoMime({ buffer, mimetype: documento.mime_type })) {
+            throw new AppError('O arquivo enviado está corrompido ou não corresponde ao formato informado. Envie-o novamente.', 422);
+        }
         const texto = await extrairTexto({ buffer, mimetype: documento.mime_type || 'application/pdf' });
         if (!texto?.trim()) throw new AppError('Não foi possível extrair texto deste arquivo. Verifique se a imagem está legível e tente novamente.', 422);
         await BD.query(`UPDATE documents SET extracted_text = $1, status = 'extracted', error_message = NULL, updated_at = NOW() WHERE id = $2`, [texto, documentId]);

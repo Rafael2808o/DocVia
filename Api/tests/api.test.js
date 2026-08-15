@@ -4,7 +4,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../app.js';
 import { env } from '../config/env.js';
-import { salvarArquivo } from '../src/services/storageService.js';
+import { arquivoCorrespondeAoMime, salvarArquivo } from '../src/services/storageService.js';
 import { normalizarMimeDoUpload } from '../src/routes/rotasDocumentos.js';
 
 test('Swagger fica disponível', async () => {
@@ -88,6 +88,11 @@ test('upload rejeita conteúdo que não corresponde ao MIME declarado', async ()
         }),
         { message: 'O conteúdo do arquivo não corresponde ao tipo informado' }
     );
+});
+
+test('upload rejeita PNG corrompido mesmo quando possui a assinatura correta', () => {
+    const pngCorrompido = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00]);
+    assert.equal(arquivoCorrespondeAoMime({ mimetype: 'image/png', buffer: pngCorrompido }), false);
 });
 
 test('upload reconhece PDF marcado genericamente pelo Android pela extensão', () => {
