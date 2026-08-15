@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     region: virginia
-    branch: codex/play-store-release
+    branch: master
     dockerfilePath: ./Api/Dockerfile
     dockerContext: ./Api
     healthCheckPath: /health/ready
@@ -38,16 +38,8 @@ services:
       - key: PASSWORD_RESET_URL
         value: docvia://reset-password
       - key: EMAIL_PROVIDER
-        value: smtp
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: 465
-      - key: SMTP_SECURE
-        value: true
-      - key: SMTP_USER
-        value: zrafaelxd07@gmail.com
-      - key: SMTP_PASSWORD
+        value: brevo
+      - key: BREVO_API_KEY
         sync: false
       - key: MAIL_FROM
         sync: false
