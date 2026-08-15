@@ -1,284 +1,154 @@
-# DocVia API - Guia Completo
+# DocVia
 
-Este README documenta a arquitetura do backend, configuração do PostgreSQL, integração Stripe, rotas de documentos, webhooks e como preparar o projeto para produção.
+**Organize documentos, compreenda informações importantes e acompanhe prazos em um só lugar.**
 
-## 1. Visão geral do projeto
+O DocVia é um aplicativo móvel para pessoas que querem lidar com documentos do dia a dia com mais clareza e menos preocupação. O produto permite enviar ou digitalizar arquivos, extrair texto, obter análises assistidas por IA e acompanhar prazos relevantes, como vencimentos de boletos.
 
-O backend do DocVia é uma API REST em Node.js + Express que oferece:
+> Projeto em desenvolvimento ativo. A publicação na Google Play está planejada para uma etapa posterior.
 
-- autenticação JWT
-- upload e armazenamento de documentos
-- extração de texto em PDF / OCR
-- análise de documentos via IA
-- histórico de uso e limite diário
-- cobrança premium com Stripe
-- leitura de boletos e resumo de contratos
+## Principais recursos
 
-O código principal está em `Api/`.
+- Cadastro, login e sessão segura com tokens de acesso e renovação.
+- Recuperação de senha por e-mail, integrada ao provedor transacional configurado.
+- Upload ou captura de PDFs e imagens de documentos.
+- Extração de texto de PDFs e OCR para imagens.
+- Análise assistida por IA para destacar informações importantes.
+- Resumo de contratos e leitura de dados de boletos.
+- Histórico de documentos e detalhes de cada item.
+- Radar de prazos e notificações locais.
+- Exportação e exclusão de dados da conta.
+- Política de privacidade acessível dentro do aplicativo.
 
-## 2. Banco de dados
+## Princípios do produto
 
-O banco deve ser PostgreSQL. Use o arquivo `Docs/schema.sql` para criar as tabelas e índices necessários.
+O DocVia foi pensado para documentos pessoais e, por isso, prioriza:
 
-### Tabelas principais
+- **Clareza:** linguagem simples, hierarquia visual e informações acionáveis.
+- **Confiança:** dados sensíveis não devem ser expostos em telas, logs ou repositórios.
+- **Velocidade:** o caminho entre adicionar um documento e entender o que importa deve ser curto.
+- **Controle:** a pessoa usuária mantém acesso ao histórico, à exportação e à exclusão de seus dados.
 
-- `users` — contas de usuário, plano (`free` ou `premium`)
-- `documents` — arquivos enviados e metadados
-- `analyses` — resultados de IA para documentos
-- `usage_logs` — controle de limite diário
-- `subscriptions` — histórico de assinaturas premium
-- `refresh_tokens` — tokens de refresh JWT
-
-### Importante
-
-- Se você já rodou o SQL antes e recebeu erro de índice duplicado, atualize o arquivo `Docs/schema.sql` e rode novamente.
-- O backend não cria o banco automaticamente; você precisa executar o SQL no pgAdmin ou outro client.
-
-## 3. Configuração de ambiente
-
-Crie um arquivo `.env` em `Api/` com estas variáveis:
-
-```env
-NODE_ENV=development
-PORT=3000
-DB_USER=postgres
-DB_HOST=localhost
-DB_PASSWORD=senha
-DB_NAME=DocVia
-DB_PORT=5432
-JWT_SECRET=algumsegredocom32caracteres...
-AI_PROVIDER=gemini
-GEMINI_API_KEY=sua-chave-gemini
-OPENAI_API_KEY=
-PAYMENT_PROVIDER=stripe
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-API_URL=http://localhost:3000
-API_VERSION=1.0.0
-CORS_ORIGINS=*
-STORAGE_DIR=./storage
-STORAGE_PUBLIC_URL=/uploads
-OCR_ENABLED=true
-OCR_LANGUAGE=por
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX=300
-AUTH_RATE_LIMIT_WINDOW_MS=900000
-AUTH_RATE_LIMIT_MAX=8
-FAILED_LOGIN_MAX_ATTEMPTS=5
-FAILED_LOGIN_LOCKOUT_MS=900000
-```
-
-### Observações
-
-- `PAYMENT_PROVIDER` precisa ser `stripe` para usar o fluxo de assinatura.
-- `JWT_SECRET` deve ter no mínimo 32 caracteres.
-- `OCR_ENABLED=true` ativa OCR em imagens; PDFs usam `pdf-parse`.
-
-## 4. Instalação e execução
-
-No diretório `Api/`:
-
-```bash
-npm install
-npm start
-```
-
-Para rodar testes:
-
-```bash
-npm test
-```
-
-## 5. Rotas principais
-
-### Autenticação
-
-- `POST /auth/register` — cria conta
-- `POST /auth/login` — faz login e retorna `access_token` + `refresh_token`
-- `POST /auth/refresh` — renova token de acesso
-- `POST /auth/logout` — revoga refresh token
-
-### Usuário
-
-- `GET /users/me` — dados do usuário autenticado
-
-### Billing / Assinatura
-
-#### `GET /billing/plan`
-
-Retorna o plano atual do usuário e a assinatura ativa.
-
-#### `POST /billing/checkout`
-
-Inicia checkout premium.
-
-Corpo JSON:
-
-```json
-{
-  "payment_method": "card",
-  "customer_name": "Nome do Cliente",
-  "customer_email": "cliente@example.com"
-}
-```
-
-Resposta:
-
-- `payment_intent_id`
-- `client_secret`
-- `status`
-- `boleto_url` (se boleto)
-- `amount`
-- `currency`
-
-#### `POST /billing/confirm`
-
-Confirma o pagamento verificando o `PaymentIntent` no Stripe.
-
-Corpo JSON:
-
-```json
-{
-  "payment_intent_id": "pi_..."
-}
-```
-
-#### `POST /billing/cancel`
-
-Cancela a assinatura ativa e rebaixa o usuário para `free`.
-
-#### `GET /billing/subscriptions`
-
-Retorna histórico de assinaturas do usuário.
-
-#### `POST /billing/webhook`
-
-Recebe eventos Stripe e processa `payment_intent.succeeded`.
-
-## 6. Fluxo Stripe e webhook
-
-### Checkout
-
-1. Cliente chama `POST /billing/checkout`
-2. Backend cria um `PaymentIntent` Stripe
-3. O Stripe retorna `payment_intent_id` e `client_secret`
-4. Backend grava `subscriptions` com `status = 'pending'`
-
-### Confirmação manual
-
-1. Cliente chama `POST /billing/confirm`
-2. Backend consulta Stripe para conferir o status do `payment_intent`
-3. Se `succeeded`, o sistema ativa a assinatura e atualiza `users.plan` para `premium`
-
-### Webhook webhooks
-
-1. Configure Stripe para enviar eventos para:
+## Arquitetura
 
 ```text
-https://<seu-dominio>/billing/webhook
+DocVia/
+├── Api/                 API REST em Node.js e Express
+├── Mobile/DocVia/       Aplicativo Expo e React Native
+├── LegalSite/           Páginas institucionais e legais
+├── Docs/                Documentação técnica, operação e publicação
+├── Builds/               Artefatos locais de build
+└── render.yaml          Configuração de serviço no Render
 ```
 
-2. Habilite o evento:
+### Tecnologias principais
 
-- `payment_intent.succeeded`
+| Camada        | Tecnologias                                      |
+| ------------- | ------------------------------------------------ |
+| Aplicativo    | Expo, React Native, TypeScript, Expo SecureStore |
+| API           | Node.js, Express, Zod, JWT, PostgreSQL           |
+| Documentos    | Multer, PDF parsing, Tesseract OCR               |
+| IA            | Gemini, OpenAI ou Cloudflare Workers AI          |
+| Armazenamento | Local no desenvolvimento; R2 ou S3 em produção   |
+| E-mail        | Brevo, Resend ou SMTP                            |
+| Qualidade     | Node Test Runner, ESLint, Prettier e Expo Doctor |
 
-3. No backend, o webhook valida `stripe-signature` usando `STRIPE_WEBHOOK_SECRET`.
-4. Quando o evento é recebido, o backend ativa automaticamente a assinatura.
+## Comece localmente
 
-### Diferença entre `confirm` e webhook
+Use o Node.js 22 LTS para atender aos requisitos do aplicativo e da API.
 
-- `confirm` é chamado pelo cliente para confirmar pagamento manualmente.
-- Webhook é o caminho seguro e recomendado: Stripe informa o backend diretamente.
-
-## 7. Rotas de documento e IA
-
-### Upload de documento
-
-- `POST /documents`
-- Autenticação obrigatória
-- Envia `multipart/form-data` com campo `arquivo`
-- Aceita PDF, JPG e PNG
-- Campo extra: `document_type` com valores:
-  - `contrato`
-  - `exame`
-  - `boleto`
-  - `termo_de_uso`
-  - `outro`
-
-### Listar documentos
-
-- `GET /documents`
-
-### Detalhes do documento
-
-- `GET /documents/{id}`
-
-### Download de arquivo
-
-- `GET /documents/{id}/file`
-
-### Extrair boleto
-
-- `GET /documents/{id}/boleto`
-- Retorna `due_date`, `amount` e `raw_text`
-- Só funciona para documentos com `document_type === 'boleto'`
-
-### Resumo de contrato
-
-- `GET /documents/{id}/contract-summary`
-- Só funciona para documentos com `document_type === 'contrato'`
-- Usa IA para gerar resumo especializado
-
-## 8. Sugestões de produção
-
-### Segurança
-
-- Use HTTPS em produção
-- Não exponha `JWT_SECRET` ou chaves Stripe
-- Limite origem CORS apenas aos domínios do app
-
-### Stripe
-
-- Use chaves de produção `sk_live_...` em produção
-- Ative `STRIPE_WEBHOOK_SECRET` correto
-- Valide o endpoint webhook e monitore falhas
-
-### Banco de dados
-
-- Faça backup antes de rodar migrações
-- Use `CREATE TABLE IF NOT EXISTS` para não quebrar em atualizações
-
-## 9. Debug e validação
-
-### Verificar configurações
-
-Execute:
+### API
 
 ```bash
 cd Api
-node -e "import { env } from './config/env.js'; console.log(env);"
+npm install
 ```
 
-### Testar webhook localmente
-
-Use o Stripe CLI:
+Crie `Api/.env` com a conexão PostgreSQL, um `JWT_SECRET` de 32 ou mais caracteres e a credencial do provedor de IA selecionado.
 
 ```bash
-stripe listen --forward-to localhost:3000/billing/webhook
+npm start
+npm test
 ```
 
-E depois gere um evento:
+A API local é iniciada, por padrão, em `http://localhost:3000`. A documentação interativa fica disponível em `/docs`.
+
+### Aplicativo móvel
 
 ```bash
-stripe trigger payment_intent.succeeded
+cd Mobile/DocVia
+npm install
 ```
 
-## 10. Observações finais
+Crie `Mobile/DocVia/.env` e informe a URL da API:
 
-- O fluxo atual de Stripe funciona como assinatura premium de 30 dias após pagamento.
-- Para uma assinatura recorrente real, seria necessário migrar para a API de `subscriptions` do Stripe.
-- O backend já protege rotas com JWT e rate limiting.
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3000
+```
 
----
+Use `10.0.2.2` no emulador Android. Em um aparelho físico, informe o IP local da máquina ou uma URL HTTPS pública.
 
-Se quiser, posso também gerar um `README` específico para o ambiente de desenvolvimento local com exemplos de requests `curl` e Postman.
+```bash
+npm run android
+# ou
+npm start
+```
+
+Validações disponíveis:
+
+```bash
+npm run typecheck
+npm run lint
+npm run format:check
+```
+
+## Configuração de produção
+
+Em produção, a API exige HTTPS, origens CORS restritas, armazenamento privado de objetos e credenciais reais para os serviços usados. Consulte:
+
+- [Guia de publicação da API](Api/deploy/README.md)
+- [Guia do aplicativo móvel](Mobile/DocVia/README.md)
+- [Status de pré-lançamento](Docs/PRELAUNCH_STATUS_2026-08-13.md)
+- [Direção de produto e interface](Docs/PRODUCT_DESIGN_PROMPT.md)
+
+Nunca inclua chaves, senhas, tokens ou arquivos `.env` no Git.
+
+### E-mail transacional
+
+O fluxo de recuperação de senha está implementado e configurado para o Brevo. A conta do provedor precisa ter o envio transacional aprovado antes de enviar mensagens reais em produção. Essa ativação é feita pelo próprio Brevo após a análise do chamado aberto.
+
+## Endpoints principais
+
+| Área         | Endpoints                                                             |
+| ------------ | --------------------------------------------------------------------- |
+| Autenticação | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` |
+| Recuperação  | `POST /auth/forgot-password`, `/auth/reset-password`                  |
+| Conta        | `GET /users/me`, `GET /users/me/export`, `DELETE /users/me`           |
+| Documentos   | `POST /documents`, `GET /documents`, `GET /documents/:id`             |
+| Análises     | `POST /analyses/:id/analyze`, `GET /analyses/:id/analysis`            |
+| Prazos       | `GET /documents/deadlines/upcoming`                                   |
+| Saúde        | `GET /health/live`, `GET /health/ready`                               |
+
+Consulte `/docs` na API em execução para o contrato completo.
+
+## Segurança e privacidade
+
+- Tokens do aplicativo são mantidos no armazenamento seguro do dispositivo.
+- A API aplica validação de entrada, autenticação, limite de requisições e bloqueio temporário após tentativas de login excessivas.
+- Os documentos devem usar armazenamento privado e URLs autenticadas em produção.
+- Antes de processar documentos reais com IA, confirme as condições de privacidade e retenção do provedor escolhido.
+
+## Estado do projeto
+
+O repositório usa a branch `master` como fonte única de desenvolvimento. As funcionalidades de aplicativo e API são verificadas localmente; publicação em loja, faturamento real, integridade do dispositivo e notificações remotas dependem de contas e credenciais externas.
+
+## Contribuição
+
+1. Crie uma branch a partir de `master`.
+2. Faça mudanças pequenas e objetivas.
+3. Execute os testes e validações relacionados à sua alteração.
+4. Não envie segredos, builds locais ou arquivos de configuração privada.
+5. Abra uma revisão descrevendo o problema, a solução e como ela foi testada.
+
+## Licença
+
+Consulte os arquivos de licença existentes em cada componente do repositório antes de redistribuir ou reutilizar o projeto.
