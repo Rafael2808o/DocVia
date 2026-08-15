@@ -1,4 +1,4 @@
-# Estado de pré-lançamento do DocVia — 13/08/2026
+# Estado de pré-lançamento do DocVia — atualizado em 14/08/2026
 
 ## Decisão atual
 
@@ -16,7 +16,7 @@
 ## Evidências executadas
 
 - API: 21/21 testes automatizados aprovados; `npm audit --omit=dev` sem vulnerabilidades.
-- Mobile: TypeScript e ESLint aprovados; Expo Doctor 20/20 e dependências compatíveis com SDK 57.
+- Mobile: TypeScript e ESLint aprovados; Expo Doctor 21/21 e dependências compatíveis com SDK 57.
 - Android: AAB de produção assinado pelo EAS concluído e baixado em `Builds/DocVia-1.0.0-1.aab` (61.435.173 bytes; SHA-256 `02AC8865FB10B10E5D3EC3CEA09F1AE5BFB56EA09587A57D834C5BC3BF59211C`). A estrutura contém manifesto, DEX, quatro arquiteturas nativas e assinatura RSA.
 - Android instalável: APK interno concluído e baixado em `Builds/DocVia-1.0.0-preview.apk` (90.309.536 bytes; SHA-256 `4B415E9BC39FBE98E82830EDADEDE4E1E6DE50B2772DE1854F2B515C9E64610D`). A estrutura contém manifesto, DEX e bibliotecas para ARM64, ARMv7 e x86_64. O build EAS `a3ec64c4-3c1b-48df-881e-d7512f80aa48` terminou com status `FINISHED`.
 - Produção real: cadastro, login, refresh token, isolamento entre usuários, consentimento, upload privado, criação por texto, processamento assíncrono, IA, prazos, exportação e exclusão completa de conta aprovados.
@@ -52,7 +52,7 @@
 - Render Free entra em suspensão e a primeira requisição pode demorar dezenas de segundos.
 - Supabase Free pode pausar por inatividade e possui limites de armazenamento/banco.
 - O limite gratuito da IA pode ser atingido; a API bloqueia novas análises em vez de gerar cobrança.
-- O `npm audit` do app móvel ainda reporta avisos transitivos em ferramentas Expo/Metro. O Expo Doctor passa 20/20; as correções sugeridas pelo npm fariam downgrade incompatível, portanto não foram aplicadas.
+- O `npm audit` do app móvel ainda reporta avisos transitivos em ferramentas Expo/Metro. O Expo Doctor passa 21/21; as correções sugeridas pelo npm fariam downgrade incompatível, portanto não foram aplicadas.
 - Resumos de IA podem reproduzir trechos em vez de condensá-los; o aviso de limitação continua visível e conteúdo importante deve ser conferido no documento original.
 
 ## Recuperação de senha

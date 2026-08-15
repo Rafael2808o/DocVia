@@ -1,6 +1,6 @@
 # Pacote de lançamento Google Play — DocVia
 
-## Atualização de infraestrutura — 13 de agosto de 2026
+## Atualização de infraestrutura — 14 de agosto de 2026
 
 - [x] Páginas de privacidade, termos e exclusão públicas no Cloudflare Pages.
 - [x] Supabase Free criado em São Paulo, schema aplicado e conexão real testada.
@@ -10,7 +10,7 @@
 
 Detalhes e evidências do banco: `Docs/SUPABASE_PRODUCTION.md`.
 
-Atualizado em 13 de agosto de 2026.
+Atualizado em 14 de agosto de 2026.
 
 ## Estado objetivo
 
@@ -110,7 +110,7 @@ Declarações confirmadas ou ainda condicionais:
 
 - AAB de produção: `Builds/DocVia-1.0.0-1.aab`, build EAS `b9812c02-78be-484e-8b2e-7576626cb717`.
 - APK de teste interno: `Builds/DocVia-1.0.0-preview.apk`, build EAS `a3ec64c4-3c1b-48df-881e-d7512f80aa48`.
-- SDK Expo 57, target SDK 36, TypeScript/ESLint aprovados e Expo Doctor 20/20.
+- SDK Expo 57, target SDK 36, TypeScript/ESLint aprovados e Expo Doctor 21/21.
 
 ## Ordem segura de publicação
 
