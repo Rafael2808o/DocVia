@@ -14,6 +14,32 @@ import { env } from '../../config/env.js';
 const router = Router();
 
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const TIPOS_GENERICOS = new Set(['application/octet-stream', 'binary/octet-stream', '']);
+const MIME_POR_EXTENSAO = {
+    pdf: 'application/pdf',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+};
+
+// Alguns provedores de arquivos no Android identificam PDFs como
+// application/octet-stream. A assinatura do arquivo ainda é validada no
+// storageService; aqui só recuperamos o MIME correto a partir da extensão.
+export function normalizarMimeDoUpload(file) {
+    const mime = String(file?.mimetype || '').toLowerCase();
+    if (TIPOS_PERMITIDOS.includes(mime)) return file;
+    if (!TIPOS_GENERICOS.has(mime)) {
+        throw new AppError('Tipo de arquivo não permitido. Envie PDF, JPG ou PNG.', 400);
+    }
+
+    const extensao = String(file?.originalname || '').split('.').pop().toLowerCase();
+    const mimeInferido = MIME_POR_EXTENSAO[extensao];
+    if (!mimeInferido) {
+        throw new AppError('Tipo de arquivo não permitido. Envie PDF, JPG ou PNG.', 400);
+    }
+    file.mimetype = mimeInferido;
+    return file;
+}
 
 function publicDocument(documento) {
     const { storage_path, user_id, extracted_text, ...publico } = documento;
@@ -24,7 +50,8 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     fileFilter: (req, file, cb) => {
-        if (!TIPOS_PERMITIDOS.includes(file.mimetype)) {
+        const mime = String(file.mimetype || '').toLowerCase();
+        if (!TIPOS_PERMITIDOS.includes(mime) && !TIPOS_GENERICOS.has(mime)) {
             return cb(new AppError('Tipo de arquivo não permitido. Envie PDF, JPG ou PNG.', 400));
         }
         cb(null, true);
@@ -69,6 +96,7 @@ router.post(
             throw new AppError('Nenhum arquivo enviado', 400);
         }
 
+        normalizarMimeDoUpload(req.file);
         const arquivoSalvo = await salvarArquivo(req.file);
         try {
             const resultado = await BD.query(

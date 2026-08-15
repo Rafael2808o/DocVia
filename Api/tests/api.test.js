@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { app } from '../app.js';
 import { env } from '../config/env.js';
 import { salvarArquivo } from '../src/services/storageService.js';
+import { normalizarMimeDoUpload } from '../src/routes/rotasDocumentos.js';
 
 test('Swagger fica disponível', async () => {
     const resposta = await request(app).get('/docs/');
@@ -86,5 +87,18 @@ test('upload rejeita conteúdo que não corresponde ao MIME declarado', async ()
             buffer: Buffer.from('isto não é um PDF'),
         }),
         { message: 'O conteúdo do arquivo não corresponde ao tipo informado' }
+    );
+});
+
+test('upload reconhece PDF marcado genericamente pelo Android pela extensão', () => {
+    const arquivo = { originalname: 'boleto.pdf', mimetype: 'application/octet-stream' };
+    normalizarMimeDoUpload(arquivo);
+    assert.equal(arquivo.mimetype, 'application/pdf');
+});
+
+test('upload não aceita tipo genérico sem uma extensão permitida', () => {
+    assert.throws(
+        () => normalizarMimeDoUpload({ originalname: 'boleto.docx', mimetype: 'application/octet-stream' }),
+        { message: 'Tipo de arquivo não permitido. Envie PDF, JPG ou PNG.' }
     );
 });

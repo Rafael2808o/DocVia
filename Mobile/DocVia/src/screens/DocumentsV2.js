@@ -7,21 +7,21 @@ import { documentsApi } from '../services/api';
 import { common } from '../theme';
 import { date, typeLabel } from './shared';
 
-const violet = '#168B94';
+const violet = '#5D43F2';
 const filters = [['todos', 'Todos'], ['contrato', 'Contrato'], ['exame', 'Exame'], ['boleto', 'Boleto'], ['termo_de_uso', 'Termo'], ['outro', 'Outro']];
 const typeVisuals = {
-  contrato: { color: '#39C6CB', background: '#39C6CB1F', Icon: FileText },
+  contrato: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText },
   exame: { color: '#24D6AF', background: '#24D6AF1F', Icon: HeartPulse },
   boleto: { color: '#E5BD3E', background: '#E5BD3E1F', Icon: ReceiptText },
-  outro: { color: '#39C6CB', background: '#39C6CB1F', Icon: FileText },
+  outro: { color: '#8B80FF', background: '#8B80FF1F', Icon: FileText },
 };
-const searchFocusStyles = StyleSheet.create({ active: { borderColor: '#168B94', boxShadow: '0 0 10px rgba(93, 67, 242, 0.30)', shadowColor: '#168B94', shadowOpacity: .28, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4 } });
+const searchFocusStyles = StyleSheet.create({ active: { borderColor: '#5D43F2', boxShadow: '0 0 10px rgba(93, 67, 242, 0.30)', shadowColor: '#5D43F2', shadowOpacity: .28, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4 } });
 
 function visualFor(document) { return typeVisuals[document.document_type] || typeVisuals.outro; }
 
 function statusFor(document) {
   if (document.status === 'failed') return { label: document.error_message || 'Falha no processamento', color: '#FF7E8A' };
-  if (document.status !== 'done') return { label: 'Processamento em andamento', color: '#39C6CB' };
+  if (document.status !== 'done') return { label: 'Processamento em andamento', color: '#8B80FF' };
   const warnings = document.analysis_warnings || [];
   const critical = warnings.some((item) => ['critico', 'crítico', 'critical'].includes(String(item?.prioridade || item?.priority || '').toLowerCase()));
   if (critical) return { label: 'Aviso crítico na análise — revise os detalhes', color: '#FF737D' };
@@ -37,7 +37,7 @@ function DocumentRow({ document, openDocument }) {
 function EmptyDocuments({ hasDocuments, onUpload }) {
   const title = hasDocuments ? 'Nenhum documento encontrado' : 'Nenhum documento por aqui';
   const text = hasDocuments ? 'Ajuste sua busca ou tente outro filtro.' : 'Envie um documento para analisar e acompanhar prazos.';
-  const content = <><View style={styles.emptyIcon}><Upload size={20} color="#76D9DC" strokeWidth={1.9} /></View><View style={styles.emptyCopy}><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{text}</Text></View><ChevronRight size={17} color="#646878" /></>;
+  const content = <><View style={styles.emptyIcon}><Upload size={20} color="#A99DFF" strokeWidth={1.9} /></View><View style={styles.emptyCopy}><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{text}</Text></View><ChevronRight size={17} color="#646878" /></>;
   return hasDocuments ? <View style={styles.emptyDocuments}>{content}</View> : <Pressable accessibilityRole="button" accessibilityLabel="Enviar documento" onPress={onUpload} style={({ pressed }) => [styles.emptyDocuments, pressed && styles.documentPressed]}>{content}</Pressable>;
 }
 
@@ -59,5 +59,5 @@ export default function DocumentsV2({ openDocument, navigate }) {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 22, paddingTop: 38, paddingBottom: 130, gap: 12 }, loading: { padding: 22, gap: 14 }, title: { color: '#F0FAFB', fontSize: 23, letterSpacing: .1, fontWeight: '800' }, subtitle: { color: '#7E8090', fontSize: 12, marginTop: 6 }, search: { height: 47, marginTop: 7, borderRadius: 17, borderWidth: 1, borderColor: '#24434A', backgroundColor: '#11121A', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 11 }, searchInput: { flex: 1, color: '#F0FAFB', fontSize: 12, paddingVertical: 0, outlineStyle: 'none' }, filters: { gap: 8, paddingVertical: 1 }, filter: { height: 32, paddingHorizontal: 17, borderRadius: 16, borderWidth: 1, borderColor: '#24434A', backgroundColor: '#11121A', alignItems: 'center', justifyContent: 'center' }, filterActive: { backgroundColor: violet, borderColor: violet }, filterPressed: { opacity: .78 }, filterText: { color: '#9AB4B8', fontSize: 11, fontWeight: '700' }, filterTextActive: { color: '#FFFFFF' }, documents: { gap: 10, marginTop: 5 }, document: { minHeight: 118, borderRadius: 17, borderWidth: 1, borderColor: '#24434A', backgroundColor: '#0B171A', padding: 14, justifyContent: 'space-between' }, documentPressed: { opacity: .82, transform: [{ scale: .99 }] }, documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12 }, fileIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' }, documentCopy: { flex: 1, minWidth: 0 }, documentName: { color: '#F0FAFB', fontSize: 13, fontWeight: '700' }, metaLine: { flexDirection: 'row', alignItems: 'center', marginTop: 7 }, typeTag: { overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 3, fontSize: 8, lineHeight: 10, letterSpacing: .7, fontWeight: '900' }, documentDate: { color: '#78979C', fontSize: 10, marginLeft: 6 }, riskLine: { borderTopWidth: 1, borderTopColor: '#24434A', paddingTop: 11, flexDirection: 'row', alignItems: 'center', gap: 9 }, riskDot: { width: 6, height: 6, borderRadius: 3 }, riskText: { color: '#9AB4B8', fontSize: 10 }, emptyDocuments: { minHeight: 86, marginTop: 5, borderRadius: 17, borderWidth: 1, borderColor: '#24434A', backgroundColor: '#0B171A', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, emptyIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#168B941F', alignItems: 'center', justifyContent: 'center' }, emptyCopy: { flex: 1 }, emptyTitle: { color: '#F0FAFB', fontSize: 13, fontWeight: '700' }, emptyText: { color: '#8FAAAF', fontSize: 10, marginTop: 5 }
+  content: { paddingHorizontal: 22, paddingTop: 38, paddingBottom: 130, gap: 12 }, loading: { padding: 22, gap: 14 }, title: { color: '#F4F4F8', fontSize: 23, letterSpacing: .1, fontWeight: '800' }, subtitle: { color: '#7E8090', fontSize: 12, marginTop: 6 }, search: { height: 47, marginTop: 7, borderRadius: 17, borderWidth: 1, borderColor: '#262833', backgroundColor: '#11121A', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 11 }, searchInput: { flex: 1, color: '#F0F0F5', fontSize: 12, paddingVertical: 0, outlineStyle: 'none' }, filters: { gap: 8, paddingVertical: 1 }, filter: { height: 32, paddingHorizontal: 17, borderRadius: 16, borderWidth: 1, borderColor: '#292B37', backgroundColor: '#11121A', alignItems: 'center', justifyContent: 'center' }, filterActive: { backgroundColor: violet, borderColor: violet }, filterPressed: { opacity: .78 }, filterText: { color: '#9A9CAB', fontSize: 11, fontWeight: '700' }, filterTextActive: { color: '#FFFFFF' }, documents: { gap: 10, marginTop: 5 }, document: { minHeight: 118, borderRadius: 17, borderWidth: 1, borderColor: '#242631', backgroundColor: '#101118', padding: 14, justifyContent: 'space-between' }, documentPressed: { opacity: .82, transform: [{ scale: .99 }] }, documentMain: { flexDirection: 'row', alignItems: 'center', gap: 12 }, fileIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' }, documentCopy: { flex: 1, minWidth: 0 }, documentName: { color: '#F0F0F5', fontSize: 13, fontWeight: '700' }, metaLine: { flexDirection: 'row', alignItems: 'center', marginTop: 7 }, typeTag: { overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 3, fontSize: 8, lineHeight: 10, letterSpacing: .7, fontWeight: '900' }, documentDate: { color: '#777A8C', fontSize: 10, marginLeft: 6 }, riskLine: { borderTopWidth: 1, borderTopColor: '#242631', paddingTop: 11, flexDirection: 'row', alignItems: 'center', gap: 9 }, riskDot: { width: 6, height: 6, borderRadius: 3 }, riskText: { color: '#A0A2AF', fontSize: 10 }, emptyDocuments: { minHeight: 86, marginTop: 5, borderRadius: 17, borderWidth: 1, borderColor: '#242631', backgroundColor: '#101118', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, emptyIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#5D43F21F', alignItems: 'center', justifyContent: 'center' }, emptyCopy: { flex: 1 }, emptyTitle: { color: '#F0F0F5', fontSize: 13, fontWeight: '700' }, emptyText: { color: '#838695', fontSize: 10, marginTop: 5 }
 });

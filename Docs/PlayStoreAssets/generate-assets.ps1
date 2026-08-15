@@ -60,7 +60,7 @@ try {
 $background = New-Object System.Drawing.Bitmap(1024, 1024, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $backgroundGraphics = [System.Drawing.Graphics]::FromImage($background)
 try {
-    $backgroundGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#071012'))
+    $backgroundGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#08080F'))
     $background.Save((Join-Path $mobileAssets 'android-icon-background.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 } finally {
     $backgroundGraphics.Dispose()
