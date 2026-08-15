@@ -71,5 +71,9 @@ export async function enviarEmailRedefinicao(email, token) {
             body: JSON.stringify({ from: env.MAIL_FROM, to: [email], subject: 'Redefina sua senha DocVia', html }),
         });
     }
-    if (!resposta.ok) throw new AppError('Não foi possível enviar o e-mail de recuperação', 502);
+    if (!resposta.ok) {
+        const detalhe = (await resposta.text()).slice(0, 300);
+        const provedor = env.EMAIL_PROVIDER === 'brevo' ? 'Brevo' : 'Resend';
+        throw new AppError(`Não foi possível enviar o e-mail de recuperação (${provedor} ${resposta.status}: ${detalhe})`, 502);
+    }
 }
