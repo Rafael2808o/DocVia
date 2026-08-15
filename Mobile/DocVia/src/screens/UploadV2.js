@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/static-components */
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Rect } from 'react-native-svg';
@@ -68,7 +68,12 @@ export default function UploadV2({ navigate }) {
     setSending(true);
     try {
       await userApi.consent();
-      const response = source === 'text' ? await documentsApi.uploadText(manualText.trim(), type) : await documentsApi.upload(file.webFile || { uri: file.uri, name: file.name, type: file.type }, type);
+      // O FormData nativo aceita a referência URI. O objeto `asset.file` é
+      // exclusivo da web e causa "Unsupported FormDataPart" no Android.
+      const uploadFile = Platform.OS === 'web' && file.webFile
+        ? file.webFile
+        : { uri: file.uri, name: file.name, type: file.type };
+      const response = source === 'text' ? await documentsApi.uploadText(manualText.trim(), type) : await documentsApi.upload(uploadFile, type);
       setDocument(response.documento);
     } catch (error) {
       Alert.alert('Não foi possível enviar', error.message);
