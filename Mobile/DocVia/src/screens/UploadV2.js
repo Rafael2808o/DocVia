@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/static-components */
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Rect } from 'react-native-svg';
@@ -16,6 +16,7 @@ const mimePorExtensao = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'imag
 
 function mimeDoArquivo(asset, name, mode) {
   const informado = String(asset.mimeType || '').toLowerCase();
+  if (informado === 'image/jpg') return 'image/jpeg';
   if (['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(informado)) return informado;
   const extensao = name.split('.').pop()?.toLowerCase();
   if (mimePorExtensao[extensao]) return mimePorExtensao[extensao];
@@ -42,24 +43,28 @@ export default function UploadV2({ navigate }) {
   const scheduledDocumentId = useRef();
 
   const pick = async (mode) => {
-    setSource(mode);
-    let asset;
-    if (mode === 'file') {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'application/octet-stream', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
-      if (!result.canceled) asset = result.assets[0];
-    } else {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) return Alert.alert('Permissão necessária', 'Permita o acesso para selecionar ou digitalizar o documento.');
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: .9 });
-      if (!result.canceled) asset = result.assets[0];
+    try {
+      setSource(mode);
+      let asset;
+      if (mode === 'file') {
+        const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'application/octet-stream', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
+        if (!result.canceled) asset = result.assets[0];
+      } else {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) return Alert.alert('Permissão necessária', 'Permita o acesso para selecionar ou digitalizar o documento.');
+        const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: .9 });
+        if (!result.canceled) asset = result.assets[0];
+      }
+      if (!asset) return;
+      const size = asset.size || asset.fileSize || 0;
+      if (size > 10 * 1024 * 1024) return Alert.alert('Arquivo muito grande', 'Envie PDF, JPG ou PNG de até 10 MB.');
+      const name = asset.name || asset.fileName || (mode === 'camera' ? 'documento.jpg' : 'documento');
+      const mimeType = mimeDoArquivo(asset, name, mode);
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(mimeType)) return Alert.alert('Formato não suportado', 'Envie o documento em PDF, JPG ou PNG.');
+      setFile({ uri: asset.uri, name, type: mimeType, size, webFile: asset.file });
+    } catch (error) {
+      Alert.alert('Não foi possível abrir o arquivo', error?.message || 'Tente selecionar o documento novamente.');
     }
-    if (!asset) return;
-    const size = asset.size || asset.fileSize || 0;
-    if (size > 10 * 1024 * 1024) return Alert.alert('Arquivo muito grande', 'Envie PDF, JPG ou PNG de até 10 MB.');
-    const name = asset.name || asset.fileName || (mode === 'camera' ? 'documento.jpg' : 'documento');
-    const mimeType = mimeDoArquivo(asset, name, mode);
-    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(mimeType)) return Alert.alert('Formato não suportado', 'Envie um boleto em PDF, JPG ou PNG.');
-    setFile({ uri: asset.uri, name, type: mimeType, size, webFile: asset.file });
   };
 
   const send = async () => {
@@ -68,12 +73,7 @@ export default function UploadV2({ navigate }) {
     setSending(true);
     try {
       await userApi.consent();
-      // O FormData nativo aceita a referência URI. O objeto `asset.file` é
-      // exclusivo da web e causa "Unsupported FormDataPart" no Android.
-      const uploadFile = Platform.OS === 'web' && file.webFile
-        ? file.webFile
-        : { uri: file.uri, name: file.name, type: file.type };
-      const response = source === 'text' ? await documentsApi.uploadText(manualText.trim(), type) : await documentsApi.upload(uploadFile, type);
+      const response = source === 'text' ? await documentsApi.uploadText(manualText.trim(), type) : await documentsApi.upload(file, type);
       setDocument(response.documento);
     } catch (error) {
       Alert.alert('Não foi possível enviar', error.message);
@@ -83,7 +83,7 @@ export default function UploadV2({ navigate }) {
   };
 
   useEffect(() => {
-    if (!document?.id || ['done', 'failed'].includes(document.status)) return undefined;
+    if (!document?.id || ['done', 'completed', 'failed'].includes(document.status)) return undefined;
     const timer = setInterval(async () => { try { setDocument(await documentsApi.detail(document.id)); } catch { clearInterval(timer); } }, 3000);
     return () => clearInterval(timer);
   }, [document?.id, document?.status]);

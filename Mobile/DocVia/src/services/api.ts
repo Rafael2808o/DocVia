@@ -1,3 +1,6 @@
+import { File as ExpoFile } from 'expo-file-system';
+import { Platform } from 'react-native';
+
 import { API_TIMEOUT_MS, API_URL } from '../config';
 import { expireSession, getSession, saveSession } from './session';
 
@@ -88,7 +91,15 @@ export const authApi = {
 };
 
 export const documentsApi = {
-  list: () => request('/documents'), deadlines: () => request('/documents/deadlines/upcoming?days=30'), detail: (id: string) => request(`/documents/${id}`), file: (id: string) => requestFile(`/documents/${id}/file`), job: (id: string) => request(`/documents/jobs/${id}`), boleto: (id: string) => request(`/documents/${id}/boleto`), retry: (id: string) => request(`/documents/${id}/retry`, { method: 'POST' }), remove: (id: string) => request(`/documents/${id}`, { method: 'DELETE' }), upload: (file: any, document_type: string) => { const body = new FormData(); body.append('arquivo', file); body.append('document_type', document_type); return request('/documents', { method: 'POST', body }); }, uploadText: (text: string, document_type: string) => request('/documents/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, document_type }) }),
+  list: () => request('/documents'), deadlines: () => request('/documents/deadlines/upcoming?days=30'), detail: (id: string) => request(`/documents/${id}`), file: (id: string) => requestFile(`/documents/${id}/file`), job: (id: string) => request(`/documents/jobs/${id}`), boleto: (id: string) => request(`/documents/${id}/boleto`), retry: (id: string) => request(`/documents/${id}/retry`, { method: 'POST' }), remove: (id: string) => request(`/documents/${id}`, { method: 'DELETE' }), upload: (file: any, document_type: string) => {
+    const body = new FormData();
+    const uploadPart = Platform.OS === 'web' && file.webFile
+      ? file.webFile
+      : new ExpoFile(file.uri);
+    body.append('arquivo', uploadPart as Blob, file.name);
+    body.append('document_type', document_type);
+    return request('/documents', { method: 'POST', body });
+  }, uploadText: (text: string, document_type: string) => request('/documents/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, document_type }) }),
 };
 
 export const userApi = {
