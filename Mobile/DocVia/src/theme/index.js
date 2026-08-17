@@ -8,15 +8,16 @@ export const colors = {
   text: '#EEF7FB',
   muted: '#9DB8C5',
   tertiary: '#718894',
-  primary: '#B2D5E5',
-  primaryDark: '#8FBCCC',
-  primarySoft: '#B2D5E524',
-  // O app usa azul como único tom de destaque, inclusive em estados concluídos.
-  success: '#B2D5E5',
-  warning: '#B2D5E5',
+  primary: '#147D92',
+  primaryDark: '#0E6678',
+  primaryLight: '#62D4C7',
+  primarySoft: '#147D9224',
+  // O azul-petróleo é a assinatura única do DocVia em ações, foco e estados ativos.
+  success: '#62D4C7',
+  warning: '#62D4C7',
   error: '#EF4444',
-  ai: '#B2D5E5',
-  aiSoft: '#B2D5E51F',
+  ai: '#62D4C7',
+  aiSoft: '#147D921F',
   white: '#FFFFFF',
 };
 export const spacing = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32, xxxl: 40 };

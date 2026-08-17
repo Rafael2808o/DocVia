@@ -57,20 +57,52 @@ try {
     $icon.Dispose()
 }
 
+$featureSource = New-Object System.Drawing.Bitmap(1794, 876, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$featureGraphics = [System.Drawing.Graphics]::FromImage($featureSource)
+$featureIcon = [System.Drawing.Image]::FromFile($sourceIcon)
+try {
+    $featureGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $featureGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $featureGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#071316'))
+
+    $glowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34, 20, 125, 146))
+    $featureGraphics.FillEllipse($glowBrush, 38, 45, 790, 790)
+    $glowBrush.Dispose()
+    $featureGraphics.DrawImage($featureIcon, (New-Object System.Drawing.Rectangle(140, 150, 576, 576)))
+
+    $titleFont = New-Object System.Drawing.Font('Segoe UI', 74, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $bodyFont = New-Object System.Drawing.Font('Segoe UI', 31, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $labelFont = New-Object System.Drawing.Font('Segoe UI', 22, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $titleBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#F4F7F7'))
+    $bodyBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#9EABAD'))
+    $accentBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#62D4C7'))
+    try {
+        $featureGraphics.DrawString('DOCVIA', $labelFont, $accentBrush, 830, 215)
+        $featureGraphics.DrawString("Entenda seus`ndocumentos.", $titleFont, $titleBrush, 820, 275)
+        $featureGraphics.DrawString('Clareza para decidir com segurança.', $bodyFont, $bodyBrush, 830, 535)
+    } finally {
+        $titleFont.Dispose(); $bodyFont.Dispose(); $labelFont.Dispose()
+        $titleBrush.Dispose(); $bodyBrush.Dispose(); $accentBrush.Dispose()
+    }
+    $featureSource.Save($sourceFeature, [System.Drawing.Imaging.ImageFormat]::Png)
+} finally {
+    $featureIcon.Dispose()
+    $featureGraphics.Dispose()
+    $featureSource.Dispose()
+}
+
 $background = New-Object System.Drawing.Bitmap(1024, 1024, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $backgroundGraphics = [System.Drawing.Graphics]::FromImage($background)
 try {
-    $backgroundGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#08080F'))
+    $backgroundGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#071316'))
     $background.Save((Join-Path $mobileAssets 'android-icon-background.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 } finally {
     $backgroundGraphics.Dispose()
     $background.Dispose()
 }
 
-if (Test-Path -LiteralPath $sourceFeature) {
-    $feature = [System.Drawing.Image]::FromFile($sourceFeature)
-    try { Save-ResizedPng $feature 1024 500 (Join-Path $assetRoot 'feature-graphic-1024x500.png') }
-    finally { $feature.Dispose() }
-}
+$feature = [System.Drawing.Image]::FromFile($sourceFeature)
+try { Save-ResizedPng $feature 1024 500 (Join-Path $assetRoot 'feature-graphic-1024x500.png') }
+finally { $feature.Dispose() }
 
 Write-Output 'Assets do DocVia gerados com sucesso.'

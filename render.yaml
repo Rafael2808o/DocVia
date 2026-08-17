@@ -37,6 +37,8 @@ services:
         value: https://docvia-privacidade.pages.dev/excluir-conta/
       - key: PASSWORD_RESET_URL
         value: docvia://reset-password
+      - key: EMAIL_VERIFICATION_URL
+        value: docvia://verify-email
       - key: EMAIL_PROVIDER
         value: brevo
       - key: BREVO_API_KEY

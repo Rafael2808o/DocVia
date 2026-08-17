@@ -39,6 +39,8 @@ O app continuará chamando os mesmos caminhos da API:
 - `/auth/register`
 - `/auth/forgot-password`
 - `/auth/reset-password`
+- `/auth/verify-email`
+- `/auth/resend-verification`
 - `/users/me`
 - `/documents`
 - `/documents/:id/analysis`
@@ -48,7 +50,7 @@ Se você usar Supabase apenas como banco de dados e mantiver o backend separado,
 
 ## Ponto único de lógica
 
-O arquivo `Mobile/DocVia/src/api.ts` já lê essa URL e faz todas as chamadas HTTP para a API. Não há outra configuração espalhada pelo app.
+O arquivo `Mobile/DocVia/src/services/api.ts` lê essa URL e concentra as chamadas HTTP para a API. Não há outra configuração espalhada pelo app.
 
 ## Segurança
 
@@ -58,13 +60,13 @@ O arquivo `Mobile/DocVia/src/api.ts` já lê essa URL e faz todas as chamadas HT
 
 ## Arquitetura
 
-- `App.js`: ponto de entrada e navegação do aplicativo.
-- `src/pages`: telas separadas, como `Login.js`, `Register.js`, `ForgotPassword.js`, `Home.js` e `Upload.js`.
+- `App.tsx`: ponto de entrada e navegação do aplicativo.
+- `src/screens`: onboarding, autenticação e telas principais do produto.
 - `src/components`: componentes reutilizáveis de interface.
-- `src/styles`: cores e estilos centralizados.
+- `src/theme`: cores e estilos centralizados na identidade azul-petróleo.
 - `src/services`: sessão segura e cliente HTTP.
-- `src/config/api.js`: único local para entender/configurar a URL da API.
-- A API precisa estar com a migration `Api/migrations/003_background_privacy.sql` aplicada para jobs, privacidade e radar de prazos.
+- `src/config.ts`: único local para entender/configurar a URL da API.
+- A API precisa estar com as migrations até `Api/migrations/005_email_verification.sql` aplicadas.
 
 ## Pendências externas
 

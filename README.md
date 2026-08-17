@@ -113,7 +113,9 @@ Nunca inclua chaves, senhas, tokens ou arquivos `.env` no Git.
 
 ### E-mail transacional
 
-O fluxo de recuperação de senha está implementado e configurado para o Brevo. A conta do provedor precisa ter o envio transacional aprovado antes de enviar mensagens reais em produção. Essa ativação é feita pelo próprio Brevo após a análise do chamado aberto.
+Os fluxos de confirmação de e-mail e recuperação de senha estão implementados e configurados para o Brevo. Novas contas só podem entrar depois de confirmar o link recebido; contas existentes ficam pendentes de nova confirmação ao aplicar a migração `005_email_verification.sql`, sem perder senhas ou documentos. Um reset de senha concluído também comprova a posse do endereço.
+
+A conta do provedor precisa ter o envio transacional e o remetente aprovados antes de enviar mensagens reais em produção. Configure também `EMAIL_VERIFICATION_URL=docvia://verify-email`.
 
 ## Endpoints principais
 
@@ -121,6 +123,7 @@ O fluxo de recuperação de senha está implementado e configurado para o Brevo.
 | ------------ | --------------------------------------------------------------------- |
 | Autenticação | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` |
 | Recuperação  | `POST /auth/forgot-password`, `/auth/reset-password`                  |
+| Verificação   | `POST /auth/verify-email`, `/auth/resend-verification`                |
 | Conta        | `GET /users/me`, `GET /users/me/export`, `DELETE /users/me`           |
 | Documentos   | `POST /documents`, `GET /documents`, `GET /documents/:id`             |
 | Análises     | `POST /analyses/:id/analyze`, `GET /analyses/:id/analysis`            |

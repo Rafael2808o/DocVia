@@ -12,11 +12,11 @@ function initials(name) {
   return (name || 'Sua conta').trim().charAt(0).toUpperCase();
 }
 
-function Stat({ Icon, value, label, color = '#8B80FF' }) {
+function Stat({ Icon, value, label, color = '#62D4C7' }) {
   return <Card style={styles.stat}><Icon size={17} color={color} /><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></Card>;
 }
 
-function Setting({ Icon, title, description, value, onValueChange, color = '#8B80FF' }) {
+function Setting({ Icon, title, description, value, onValueChange, color = '#62D4C7' }) {
   return <Card style={styles.setting}>
     <View style={[styles.settingIcon, { backgroundColor: `${color}19` }]}><Icon size={18} color={color} /></View>
     <View style={styles.settingCopy}><Text style={styles.settingTitle}>{title}</Text><Text style={styles.settingDescription}>{description}</Text></View>
@@ -24,7 +24,7 @@ function Setting({ Icon, title, description, value, onValueChange, color = '#8B8
   </Card>;
 }
 
-function MenuItem({ Icon, title, onPress, destructive = false, color = '#8B80FF' }) {
+function MenuItem({ Icon, title, onPress, destructive = false, color = '#62D4C7' }) {
   const textColor = destructive ? '#FF7E8A' : '#F0F0F5';
   const iconColor = destructive ? '#FF6F7C' : color;
   return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.menuItem, destructive && styles.menuItemDestructive, pressed && styles.menuPressed]}><View style={[styles.menuIcon, { backgroundColor: `${iconColor}19` }]}><Icon size={18} color={iconColor} /></View><Text style={[styles.menuText, { color: textColor }]}>{title}</Text><ChevronRight size={18} color={destructive ? '#9C414C' : '#77798A'} /></Pressable>;
@@ -164,13 +164,13 @@ const styles = StyleSheet.create({
   title: { color: '#F4F4F8', fontSize: 23, fontWeight: '800' }, subtitle: { color: '#818391', fontSize: 12, marginTop: 7 },
   notification: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#292B35', backgroundColor: '#111219', alignItems: 'center', justifyContent: 'center' },
   userCard: { minHeight: 102, flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderRadius: 19, borderColor: '#292B35', backgroundColor: '#111219' },
-  avatar: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#6439DF', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#136F83', alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   userCopy: { flex: 1 }, name: { color: '#F4F4F8', fontSize: 16, fontWeight: '800' }, email: { color: '#818391', marginTop: 4, fontSize: 11 },
-  planBadge: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: '#171438', borderWidth: 1, borderColor: '#373081', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }, planText: { color: '#C0B8FF', fontSize: 8, fontWeight: '900', letterSpacing: .9, textTransform: 'uppercase' },
+  planBadge: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: '#0D2B30', borderWidth: 1, borderColor: '#205965', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }, planText: { color: '#A3E6DF', fontSize: 8, fontWeight: '900', letterSpacing: .9, textTransform: 'uppercase' },
   stats: { flexDirection: 'row', gap: 12, marginTop: 20 }, stat: { flex: 1, minHeight: 108, gap: 5, borderRadius: 18, borderColor: '#292B35', backgroundColor: '#111219', padding: 16 }, statValue: { color: '#F4F4F8', fontSize: 24, fontWeight: '900', marginTop: 3 }, statLabel: { color: '#858795', fontSize: 10, lineHeight: 14 },
   sectionTitle: { color: '#898B9B', fontSize: 9, fontWeight: '800', letterSpacing: 1.3, textTransform: 'uppercase', marginTop: 26, marginBottom: 13 },
-  setting: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 10, borderRadius: 18, borderColor: '#292B35', backgroundColor: '#111219' }, settingIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }, settingCopy: { flex: 1 }, settingTitle: { color: '#F1F1F6', fontSize: 13, fontWeight: '800' }, settingDescription: { color: '#858795', fontSize: 10, lineHeight: 14, marginTop: 4 }, toggle: { width: 38, height: 22, borderRadius: 11, backgroundColor: '#30313B', padding: 3, justifyContent: 'center' }, toggleActive: { backgroundColor: '#6657F2' }, togglePressed: { opacity: .82 }, toggleThumb: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF' }, toggleThumbActive: { alignSelf: 'flex-end' },
+  setting: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 10, borderRadius: 18, borderColor: '#292B35', backgroundColor: '#111219' }, settingIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }, settingCopy: { flex: 1 }, settingTitle: { color: '#F1F1F6', fontSize: 13, fontWeight: '800' }, settingDescription: { color: '#858795', fontSize: 10, lineHeight: 14, marginTop: 4 }, toggle: { width: 38, height: 22, borderRadius: 11, backgroundColor: '#30313B', padding: 3, justifyContent: 'center' }, toggleActive: { backgroundColor: '#147D92' }, togglePressed: { opacity: .82 }, toggleThumb: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF' }, toggleThumbActive: { alignSelf: 'flex-end' },
   menuItem: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 13, paddingHorizontal: 16, marginBottom: 10, borderRadius: 18, borderWidth: 1, borderColor: '#292B35', backgroundColor: '#111219' }, menuItemDestructive: { borderColor: '#54262F', backgroundColor: '#1B1014' }, menuPressed: { opacity: .78, transform: [{ scale: .99 }] }, menuIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }, menuText: { flex: 1, fontSize: 13, fontWeight: '800' },
   logoutButton: { height: 52, borderRadius: 17, borderWidth: 1, borderColor: '#292B35', backgroundColor: '#0C0D12', alignItems: 'center', justifyContent: 'center', marginTop: 9 }, logoutText: { color: '#B0B1BF', fontSize: 13, fontWeight: '700' }, sheetText: { color: '#A2A4B2', fontSize: 13, lineHeight: 20 }, deleteWarning: { color: '#FF8992', fontSize: 13, lineHeight: 20 },
 });

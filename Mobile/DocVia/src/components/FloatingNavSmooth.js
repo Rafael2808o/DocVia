@@ -25,7 +25,7 @@ function Tab({ item, active, onPress }) {
   useEffect(() => { Animated.timing(iconLift, { toValue: active ? -26 : 0, ...animConfig }).start(); }, [active, iconLift]);
   return (
     <Pressable {...state.bind} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={item.label} onPress={onPress} style={[styles.tab, active && styles.activeTab]}>
-      <Animated.View style={[styles.iconSlot, { transform: [{ translateY: iconLift }] }]}><item.Icon size={21} color={active ? '#5D43F2' : color} strokeWidth={item.key === 'upload' ? 2.4 : 2} /></Animated.View>
+      <Animated.View style={[styles.iconSlot, { transform: [{ translateY: iconLift }] }]}><item.Icon size={21} color={active ? '#147D92' : color} strokeWidth={item.key === 'upload' ? 2.4 : 2} /></Animated.View>
       <Text style={styles.label}>{item.label}</Text>
     </Pressable>
   );

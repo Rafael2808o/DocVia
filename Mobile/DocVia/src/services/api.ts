@@ -9,6 +9,7 @@ let refreshInFlight: Promise<any> | null = null;
 function httpError(data: any, status: number) {
   const error: any = new Error(data.message || 'Não foi possível concluir a operação.');
   error.status = status;
+  error.code = data.code;
   return error;
 }
 
@@ -87,6 +88,8 @@ export const authApi = {
   register: (nome: string, email: string, senha: string) => request('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome, email, senha }) }),
   forgotPassword: (email: string) => request('/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }),
   resetPassword: (token: string, senha: string) => request('/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, senha }) }),
+  resendVerification: (email: string) => request('/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }),
+  verifyEmail: (token: string) => request('/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }),
   logout: (refresh_token: string) => request('/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token }) }),
 };
 

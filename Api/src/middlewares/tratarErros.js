@@ -21,7 +21,7 @@ export function tratarErros(err, req, res, next) {
         ? 'Arquivo excede o limite de 10 MB'
         : (ehErroConhecido ? err.message : 'Erro interno do servidor');
 
-    return res.status(statusCode).json({ message: mensagem });
+    return res.status(statusCode).json({ message: mensagem, ...(ehErroConhecido && err.code ? { code: err.code } : {}) });
 }
 
 // Chamado quando nenhuma rota bateu com a URL pedida (404).

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'email',
     plan VARCHAR(20) NOT NULL DEFAULT 'free',
     privacy_consent_at TIMESTAMPTZ,
+    email_verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -114,6 +115,17 @@ CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_plan_check') THEN
@@ -151,6 +163,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_document_active ON public.jobs(type, (payloa
 CREATE INDEX IF NOT EXISTS idx_login_security_locked ON public.login_security(locked_until) WHERE locked_until IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_document_deadlines_due_date ON public.document_deadlines(due_date);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_active ON public.password_reset_tokens(token_hash, expires_at) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_active ON public.email_verification_tokens(token_hash, expires_at) WHERE used_at IS NULL;
 
 -- Defesa adicional: impede acesso pelo Data API do Supabase. A API do DocVia
 -- acessa essas tabelas somente pela conexão PostgreSQL do servidor.
@@ -164,6 +177,7 @@ ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.login_security ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_deadlines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_verification_tokens ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN

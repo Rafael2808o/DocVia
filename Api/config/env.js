@@ -48,6 +48,7 @@ const ambienteSchema = z.object({
     SMTP_PASSWORD: textoOpcional,
     MAIL_FROM: remetenteOpcional,
     PASSWORD_RESET_URL: z.string().url().optional(),
+    EMAIL_VERIFICATION_URL: z.string().url().optional(),
     PRIVACY_CONTACT_EMAIL: emailOpcional,
     PRIVACY_POLICY_URL: z.string().url().optional(),
     ACCOUNT_DELETION_URL: z.string().url().optional(),
@@ -105,8 +106,8 @@ const ambienteSchema = z.object({
             if (!valor || !valor.startsWith('https://')) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório e precisa usar HTTPS em produção' });
         }
         if (!configuracao.PRIVACY_CONTACT_EMAIL) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['PRIVACY_CONTACT_EMAIL'], message: 'é obrigatório em produção' });
-        for (const [campo, valor] of [['MAIL_FROM', configuracao.MAIL_FROM], ['PASSWORD_RESET_URL', configuracao.PASSWORD_RESET_URL]]) {
-            if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório em produção porque a recuperação de senha está disponível no app' });
+        for (const [campo, valor] of [['MAIL_FROM', configuracao.MAIL_FROM], ['PASSWORD_RESET_URL', configuracao.PASSWORD_RESET_URL], ['EMAIL_VERIFICATION_URL', configuracao.EMAIL_VERIFICATION_URL]]) {
+            if (!valor) contexto.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: 'é obrigatório em produção porque a autenticação por e-mail está disponível no app' });
         }
         if (configuracao.EMAIL_PROVIDER === 'resend' && !configuracao.RESEND_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'é obrigatória quando EMAIL_PROVIDER=resend' });
         if (configuracao.EMAIL_PROVIDER === 'brevo' && !configuracao.BREVO_API_KEY) contexto.addIssue({ code: z.ZodIssueCode.custom, path: ['BREVO_API_KEY'], message: 'é obrigatória quando EMAIL_PROVIDER=brevo' });

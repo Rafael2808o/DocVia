@@ -50,3 +50,5 @@ export const deleteAccountSchema = z.object({
 
 export const forgotPasswordSchema = z.object({ email: emailSchema });
 export const resetPasswordSchema = z.object({ token: z.string().length(64), senha: z.string().min(8).max(72) });
+export const resendVerificationSchema = z.object({ email: emailSchema });
+export const verifyEmailSchema = z.object({ token: z.string().length(64) });

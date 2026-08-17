@@ -4,12 +4,13 @@ import jwt from 'jsonwebtoken';
 import { BD } from '../../db.js';
 import { validar } from '../middlewares/validar.js';
 import { limitadorAuth, verificarBloqueioLogin, registrarFalhaLogin, registrarSucessoLogin } from '../middlewares/limitadores.js';
-import { registerSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema } from '../schemas/authSchemas.js';
+import { registerSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, resendVerificationSchema, verifyEmailSchema } from '../schemas/authSchemas.js';
 import { AppError, asyncHandler } from '../../utils/erros.js';
 import { criarRefreshToken, consumirRefreshToken, revogarRefreshToken } from '../services/refreshTokenService.js';
 import { criarTokenRedefinicao, consumirTokenRedefinicao, enviarEmailRedefinicao } from '../services/passwordResetService.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { criarTokenVerificacao, consumirTokenVerificacao, enviarEmailVerificacao } from '../services/emailVerificationService.js';
 
 const router = Router();
 const SECRET_KEY = env.JWT_SECRET;
@@ -53,22 +54,43 @@ function gerarAccessToken(usuario) {
  */
 router.post('/register', limitadorAuth, validar(registerSchema), asyncHandler(async (req, res) => {
     const { nome, email, senha } = req.body;
-
     const senhaHash = await bcrypt.hash(senha, 10);
+    const cliente = await BD.connect();
+    let usuario;
+    let token;
     try {
-        const resultado = await BD.query(
-            `INSERT INTO users (name, email, password_hash, auth_provider, plan)
-             VALUES ($1, $2, $3, 'email', 'free')
+        await cliente.query('BEGIN');
+        const resultado = await cliente.query(
+            `INSERT INTO users (name, email, password_hash, auth_provider, plan, email_verified_at)
+             VALUES ($1, $2, $3, 'email', 'free', NULL)
              RETURNING id, name, email, plan, created_at`,
             [nome, email, senhaHash]
         );
-        return res.status(201).json({ message: 'Conta criada com sucesso', usuario: resultado.rows[0] });
+        usuario = resultado.rows[0];
+        token = await criarTokenVerificacao(usuario.id, cliente);
+        await cliente.query('COMMIT');
     } catch (erro) {
+        await cliente.query('ROLLBACK').catch(() => undefined);
         if (erro.code === '23505') {
             throw new AppError('Não foi possível concluir o cadastro. Tente entrar ou recuperar sua senha.', 409);
         }
         throw erro;
+    } finally {
+        cliente.release();
     }
+
+    try {
+        await enviarEmailVerificacao(email, token);
+    } catch (erro) {
+        logger.error({ err: erro, userId: usuario.id }, 'Conta criada, mas o e-mail de verificação não foi enviado');
+        throw new AppError('Sua conta foi criada, mas o e-mail não pôde ser enviado. Use reenviar confirmação.', 503, 'EMAIL_DELIVERY_FAILED');
+    }
+
+    return res.status(201).json({
+        message: 'Conta criada. Confirme o link enviado ao seu e-mail para entrar.',
+        requires_email_verification: true,
+        usuario,
+    });
 }));
 
 /**
@@ -99,7 +121,7 @@ router.post('/login', limitadorAuth, validar(loginSchema), verificarBloqueioLogi
     const { email, senha } = req.body;
 
     const resultado = await BD.query(
-        'SELECT id, name, email, password_hash, plan FROM users WHERE email = $1',
+        'SELECT id, name, email, password_hash, plan, email_verified_at FROM users WHERE email = $1',
         [email]
     );
 
@@ -115,6 +137,10 @@ router.post('/login', limitadorAuth, validar(loginSchema), verificarBloqueioLogi
     if (!senhaCorreta) {
         await registrarFalhaLogin(email);
         throw new AppError('Email ou senha inválidos', 401);
+    }
+
+    if (!usuario.email_verified_at) {
+        throw new AppError('Confirme seu e-mail antes de entrar.', 403, 'EMAIL_NOT_VERIFIED');
     }
 
     await registrarSucessoLogin(email);
@@ -161,9 +187,13 @@ router.post('/refresh', validar(refreshSchema), asyncHandler(async (req, res) =>
         throw new AppError('Refresh token inválido, expirado ou revogado', 401);
     }
 
-    const resultado = await BD.query('SELECT id, email, plan FROM users WHERE id = $1', [registro.user_id]);
+    const resultado = await BD.query('SELECT id, email, plan, email_verified_at FROM users WHERE id = $1', [registro.user_id]);
     if (resultado.rows.length === 0) {
         throw new AppError('Usuário não encontrado', 401);
+    }
+    if (!resultado.rows[0].email_verified_at) {
+        await revogarRefreshToken(refresh_token);
+        throw new AppError('Confirme seu e-mail antes de entrar.', 403, 'EMAIL_NOT_VERIFIED');
     }
 
     const accessToken = gerarAccessToken(resultado.rows[0]);
@@ -209,6 +239,37 @@ router.post('/forgot-password', limitadorAuth, validar(forgotPasswordSchema), as
     return res.status(202).json({ message: 'Se este e-mail estiver cadastrado, você receberá instruções para redefinir a senha.' });
 }));
 
+router.post('/resend-verification', limitadorAuth, validar(resendVerificationSchema), asyncHandler(async (req, res) => {
+    const usuario = await BD.query('SELECT id FROM users WHERE email = $1 AND email_verified_at IS NULL', [req.body.email]);
+    if (usuario.rows[0]) {
+        try {
+            const token = await criarTokenVerificacao(usuario.rows[0].id);
+            await enviarEmailVerificacao(req.body.email, token);
+        } catch (erro) {
+            logger.error({ err: erro, userId: usuario.rows[0].id }, 'Falha ao reenviar verificação de e-mail');
+        }
+    }
+    return res.status(202).json({ message: 'Se houver uma conta pendente, enviaremos um novo link de confirmação.' });
+}));
+
+router.post('/verify-email', limitadorAuth, validar(verifyEmailSchema), asyncHandler(async (req, res) => {
+    const cliente = await BD.connect();
+    try {
+        await cliente.query('BEGIN');
+        const userId = await consumirTokenVerificacao(req.body.token, cliente);
+        if (!userId) throw new AppError('Link de confirmação inválido ou expirado', 400);
+        await cliente.query('UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = $1', [userId]);
+        await cliente.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
+        await cliente.query('COMMIT');
+    } catch (erro) {
+        await cliente.query('ROLLBACK').catch(() => undefined);
+        throw erro;
+    } finally {
+        cliente.release();
+    }
+    return res.status(200).json({ message: 'E-mail confirmado. Você já pode entrar.' });
+}));
+
 router.post('/reset-password', validar(resetPasswordSchema), asyncHandler(async (req, res) => {
     const senhaHash = await bcrypt.hash(req.body.senha, 10);
     const cliente = await BD.connect();
@@ -216,7 +277,8 @@ router.post('/reset-password', validar(resetPasswordSchema), asyncHandler(async 
         await cliente.query('BEGIN');
         const userId = await consumirTokenRedefinicao(req.body.token, cliente);
         if (!userId) throw new AppError('Link inválido ou expirado', 400);
-        await cliente.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [senhaHash, userId]);
+        await cliente.query('UPDATE users SET password_hash = $1, email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = $2', [senhaHash, userId]);
+        await cliente.query('UPDATE email_verification_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL', [userId]);
         await cliente.query('UPDATE refresh_tokens SET revoked = true WHERE user_id = $1', [userId]);
         await cliente.query('COMMIT');
     } catch (erro) {

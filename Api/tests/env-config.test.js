@@ -21,6 +21,7 @@ const producaoValida = {
     RESEND_API_KEY: 're_teste',
     MAIL_FROM: 'DocVia <nao-responda@example.com>',
     PASSWORD_RESET_URL: 'docvia://reset-password',
+    EMAIL_VERIFICATION_URL: 'docvia://verify-email',
     AI_PROVIDER: 'gemini',
     GEMINI_API_KEY: 'chave-de-teste-valida',
     OPENAI_API_KEY: '',

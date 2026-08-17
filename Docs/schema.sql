@@ -17,6 +17,7 @@ CREATE TABLE users (
     password_hash   VARCHAR(255),          -- pode ser NULL se login via Google/Apple
     auth_provider   VARCHAR(20) NOT NULL DEFAULT 'email', -- 'email' | 'google' | 'apple'
     plan            VARCHAR(20) NOT NULL DEFAULT 'free',  -- 'free' | 'premium'
+    email_verified_at TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -186,3 +187,17 @@ CREATE INDEX IF NOT EXISTS idx_documents_processing_guard
     ON documents(status, updated_at) WHERE status IN ('queued', 'processing', 'extracted', 'analyzing');
 CREATE INDEX IF NOT EXISTS idx_jobs_document_active
     ON jobs(type, (payload->>'documentId')) WHERE status IN ('queued', 'processing');
+
+-- Migration 005: verificação obrigatória de e-mail.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_active
+    ON email_verification_tokens(token_hash, expires_at) WHERE used_at IS NULL;
+ALTER TABLE email_verification_tokens ENABLE ROW LEVEL SECURITY;

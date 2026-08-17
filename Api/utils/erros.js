@@ -2,10 +2,11 @@
 // Diferente de um erro inesperado (bug, banco fora do ar), esse tem um
 // statusCode definido e uma mensagem segura pra mostrar ao usuário.
 export class AppError extends Error {
-    constructor(message, statusCode = 400) {
+    constructor(message, statusCode = 400, code) {
         super(message);
         this.name = 'AppError';
         this.statusCode = statusCode;
+        this.code = code;
     }
 }
  
@@ -16,4 +17,3 @@ export class AppError extends Error {
 export const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
- 

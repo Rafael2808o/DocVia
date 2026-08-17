@@ -9,28 +9,28 @@ const slides = [
     title: 'Documentos sem\njuridiquês.',
     description: 'Envie um arquivo e receba um resumo\nsimples, com pontos importantes em\ndestaque.',
     Icon: FileText,
-    accent: '#6566F1',
-    iconBackground: '#10102A',
-    iconBorder: '#2A2A62',
-    gradientTop: '#10101F',
+    accent: '#147D92',
+    iconBackground: '#0A252B',
+    iconBorder: '#1B5661',
+    gradientTop: '#0B3540',
   },
   {
     title: 'Prazos que não passam.',
     description: 'A IA encontra datas importantes para\nvocê agir no momento certo.',
     Icon: Clock3,
-    accent: '#8B5CF6',
-    iconBackground: '#140F27',
-    iconBorder: '#382064',
-    gradientTop: '#110D20',
+    accent: '#62D4C7',
+    iconBackground: '#0B292B',
+    iconBorder: '#24635F',
+    gradientTop: '#0A302F',
   },
   {
     title: 'Decida com clareza.',
     description: 'Custos, riscos e próximas ações em\numa experiência segura e privada.',
     Icon: Check,
-    accent: '#18A9E6',
-    iconBackground: '#091B27',
-    iconBorder: '#0B4564',
-    gradientTop: '#091521',
+    accent: '#2BA99E',
+    iconBackground: '#0A2727',
+    iconBorder: '#23635F',
+    gradientTop: '#0A2B2C',
   },
 ];
 
@@ -48,10 +48,10 @@ export default function Onboarding({ done }) {
           <RadialGradient id="onboardingGlow" cx="50%" cy="-12%" r="78%">
             <Stop offset="0" stopColor={slide.gradientTop} stopOpacity="1" />
             <Stop offset="0.55" stopColor={slide.gradientTop} stopOpacity="0.48" />
-            <Stop offset="1" stopColor="#08080F" stopOpacity="0" />
+            <Stop offset="1" stopColor="#071316" stopOpacity="0" />
           </RadialGradient>
         </Defs>
-        <Rect width="100%" height="100%" fill="#08080F" />
+        <Rect width="100%" height="100%" fill="#071316" />
         <Rect width="100%" height="100%" fill="url(#onboardingGlow)" />
       </Svg>
       <Pressable accessibilityRole="button" accessibilityLabel="Pular apresentação" onPress={done} style={styles.skip}><Text style={styles.skipText}>Pular</Text></Pressable>
@@ -73,14 +73,14 @@ export default function Onboarding({ done }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, width: '100%', alignSelf: 'stretch', paddingHorizontal: 24 },
   skip: { alignSelf: 'flex-end', minHeight: 40, justifyContent: 'center', paddingHorizontal: 2 },
-  skipText: { color: '#787592', fontSize: 11, fontWeight: '500' },
+  skipText: { color: '#71868B', fontSize: 11, fontWeight: '500' },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 46 },
   iconBox: { width: 72, height: 72, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 35 },
   title: { color: '#F6F4FA', fontSize: 23, lineHeight: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  description: { color: '#B4B0C3', fontSize: 12, lineHeight: 19, fontWeight: '400', textAlign: 'center', marginTop: 17, letterSpacing: 0.1 },
+  description: { color: '#AAB9BB', fontSize: 12, lineHeight: 19, fontWeight: '400', textAlign: 'center', marginTop: 17, letterSpacing: 0.1 },
   footer: { gap: 27 },
   dots: { height: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#2B2A38' },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#26373B' },
   continue: { height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   continuePressed: { opacity: 0.83, transform: [{ scale: 0.99 }] },
   continueText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
