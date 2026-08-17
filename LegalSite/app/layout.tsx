@@ -12,7 +12,7 @@ export function generateMetadata(): Metadata {
     title: { default: "DocVia | Privacidade e suporte", template: "%s | DocVia" },
     description: "Central pública de privacidade, termos e exclusão de conta do DocVia.",
     icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
-    openGraph: { title: "DocVia | Privacidade e transparência", description: "Seus documentos. Suas escolhas.", url: origin, siteName: "DocVia", locale: "pt_BR", type: "website", images: [{ url: `${origin}/og.png`, width: 1536, height: 1024, alt: "DocVia — Privacidade e transparência" }] },
+    openGraph: { title: "DocVia | Privacidade e transparência", description: "Seus documentos. Suas escolhas.", url: origin, siteName: "DocVia", locale: "pt_BR", type: "website", images: [{ url: `${origin}/og.png`, width: 1200, height: 630, alt: "DocVia — Privacidade e transparência" }] },
     twitter: { card: "summary_large_image", title: "DocVia | Privacidade e transparência", description: "Seus documentos. Suas escolhas.", images: [`${origin}/og.png`] },
   };
 }
