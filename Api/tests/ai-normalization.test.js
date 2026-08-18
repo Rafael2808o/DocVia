@@ -45,9 +45,42 @@ test('completa término contratual por extenso e pagamento mensal omitidos pelo 
         deadlines: [{ descricao: 'Renovação do contrato', data: null }],
     }, 'contrato', new Date(2026, 7, 17), 'O contrato terá término em 17 de agosto de 2027. O pagamento deverá ser realizado até o dia 10 de cada mês.');
     assert.deepEqual(result.deadlines, [
-        { descricao: 'Renovação do contrato', data: '2027-08-17' },
+        { descricao: 'Término da vigência', data: '2027-08-17' },
         { descricao: 'Pagamento mensal até o dia 10', data: '2026-09-10', recorrencia: 'mensal' },
     ]);
+});
+
+test('audita datas, duração e aviso prévio sem manter prazo inventado pela IA', () => {
+    const source = `O contrato terá vigência de 12 (doze) meses, com início em 17 de agosto de 2026 e término em 17 de agosto de 2027.
+      O pagamento deverá ser realizado até o dia 10 de cada mês.
+      A rescisão exige comunicação escrita com antecedência mínima de 30 (trinta) dias.`;
+    const result = normalizeAiResult({
+        summary: 'Resumo',
+        deadlines: [
+            { descricao: 'Renovação automática', data: '2028-08-17' },
+            { descricao: 'Término do contrato', data: '2027-08-17' },
+            { descricao: 'Término do contrato', data: '2027-08-17' },
+        ],
+    }, 'contrato', new Date(2026, 7, 17), source);
+    assert.deepEqual(result.deadlines, [
+        { descricao: 'Término do contrato', data: '2027-08-17' },
+        { descricao: 'Data de início', data: '2026-08-17' },
+        { descricao: 'Aviso prévio: 30 dias', data: null },
+        { descricao: 'Vigência: 12 meses', data: null },
+        { descricao: 'Pagamento mensal até o dia 10', data: '2026-09-10', recorrencia: 'mensal' },
+    ]);
+});
+
+test('mantém somente a nova data quando o texto prorroga um prazo', () => {
+    const source = 'A entrega estava prevista para 20/08/2026. A entrega foi prorrogada para 22/08/2026 às 18h.';
+    const result = normalizeAiResult({ summary: 'Resumo', deadlines: [] }, 'outro', new Date(2026, 7, 17), source);
+    assert.deepEqual(result.deadlines, [{ descricao: 'Entrega — prazo atualizado às 18h', data: '2026-08-22' }]);
+});
+
+test('remove compromisso explicitamente cancelado', () => {
+    const source = 'A reunião será em 22/08/2026 às 14h. A reunião foi cancelada.';
+    const result = normalizeAiResult({ summary: 'Resumo', deadlines: [] }, 'outro', new Date(2026, 7, 17), source);
+    assert.deepEqual(result.deadlines, []);
 });
 
 test('remove custo duplicado e calcula multa e juros quando a base está clara', () => {
@@ -73,6 +106,15 @@ test('não exibe zero inventado quando a base percentual não está disponível'
     ]), [
         { description: 'Multa de 2% sobre o valor devido', amount: '2% sobre o valor devido' },
         { description: 'Tarifa administrativa', amount: '' },
+    ]);
+});
+
+test('recupera custos do texto quando o provedor omite a lista', () => {
+    const source = 'Valor mensal de R$ 2.500,00. Em atraso, multa de 2% sobre o valor devido e juros de 1% ao mês.';
+    assert.deepEqual(normalizeCostItems([], source), [
+        { description: 'Valor mensal', amount: 'R$ 2.500,00' },
+        { description: 'multa de 2% sobre o valor devido e juros de 1% ao mês', amount: 'R$ 50,00 (2% de R$ 2.500,00)' },
+        { description: 'juros de 1% ao mês', amount: 'R$ 25,00/mês (1% de R$ 2.500,00)' },
     ]);
 });
 

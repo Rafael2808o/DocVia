@@ -53,9 +53,14 @@ function cleanDescription(value, numericAmount) {
 
 export function normalizeCosts(items, sourceText = '') {
   const baseAmount = sourceBaseAmount(sourceText);
+  const sourceItems = [];
+  if (baseAmount) sourceItems.push({ description: /mensal/i.test(sourceText) ? 'Valor mensal' : 'Valor principal', amount: formatBrl(baseAmount) });
+  for (const match of String(sourceText || '').matchAll(/multa[^.!?\n]{0,90}?(\d+(?:[.,]\d+)?)\s*%[^.!?\n]*/gi)) sourceItems.push({ description: match[0].trim(), amount: `${match[1]}%` });
+  for (const match of String(sourceText || '').matchAll(/juros?[^.!?\n]{0,90}?(\d+(?:[.,]\d+)?)\s*%[^.!?\n]*/gi)) sourceItems.push({ description: match[0].trim(), amount: `${match[1]}%` });
+  for (const match of String(sourceText || '').matchAll(/(?:taxa|tarifa|honor[aá]rios?|indeniza[cç][aã]o|custo)[^.!?\n]{0,100}?(R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?)/gi)) sourceItems.push({ description: match[0].trim(), amount: match[1] });
   const seen = new Set();
   const result = [];
-  for (const item of Array.isArray(items) ? items : []) {
+  for (const item of [...(Array.isArray(items) ? items : []), ...sourceItems]) {
     const rawDescription = typeof item === 'string' ? item : item?.description || item?.descricao || item?.title || 'Custo';
     const rawAmount = typeof item === 'string' ? '' : item?.amount ?? item?.value ?? item?.valor ?? '';
     const numericAmount = parseBrl(rawAmount);
@@ -75,7 +80,7 @@ export function normalizeCosts(items, sourceText = '') {
       amount = String(rawAmount).trim();
     }
     const exactKey = `${textKey(description)}|${textKey(amount)}`;
-    const semanticKey = `${kind}|${numericAmount && numericAmount > 0 ? numericAmount.toFixed(2) : textKey(amount)}`;
+    const semanticKey = `${kind}|${percentage ? `percent-${percentage}` : numericAmount && numericAmount > 0 ? numericAmount.toFixed(2) : textKey(amount)}`;
     if (seen.has(exactKey) || (['multa', 'juros', 'mensalidade'].includes(kind) && seen.has(semanticKey))) continue;
     seen.add(exactKey);
     seen.add(semanticKey);

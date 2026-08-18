@@ -11,6 +11,7 @@ import { loadNotificationSettings, reconcileDocumentDeadlineAlerts, scheduleSing
 import { common } from '../theme';
 import { formatBrl, normalizeCosts } from '../utils/costs';
 import { deadlineDate, normalizeDeadlines } from '../utils/deadlines';
+import { normalizeWarnings, uniqueInsights } from '../utils/insights';
 import { date, typeLabel } from './shared';
 
 const primary = '#147D92';
@@ -78,16 +79,17 @@ export default function DocumentDetail({ id, back }) {
   if (error) return <ScrollView style={common.screen}><ErrorState error={error} retry={load} /></ScrollView>;
   if (!doc) return <ScrollView contentContainerStyle={styles.loading}><Skeleton height={28} /><Skeleton height={70} /><Skeleton height={150} /></ScrollView>;
   const analysis = doc.analysis || doc;
-  const actionItems = doc.analysis_action_items || analysis.action_items || [];
+  const actionItems = uniqueInsights(doc.analysis_action_items || analysis.action_items || []);
   const status = doc.status === 'done' ? 'PRONTO' : doc.status === 'failed' ? 'ERRO' : 'ANALISANDO';
   const dueDate = boletoDueDate(doc, boleto);
   const normalizedCosts = normalizeCosts(doc.analysis_costs || [], doc.extracted_text || '');
   const normalizedDeadlines = normalizeDeadlines(doc.analysis_deadlines || [], doc.extracted_text || '');
+  const normalizedWarnings = normalizeWarnings(doc.analysis_warnings || [], doc.extracted_text || '');
   const content = () => {
     if (tab === 'Resumo') return <><Text style={styles.summary}>{doc.analysis_summary || 'A análise ainda está sendo processada. Volte em alguns instantes.'}</Text><Text style={styles.sectionTitle}>Ações recomendadas</Text>{actionItems.length ? actionItems.map((item, index) => <DetailCard key={index} style={styles.actionCard}><Text style={styles.actionText}>{typeof item === 'string' ? item : item.descricao || item.description}</Text></DetailCard>) : <Text style={styles.emptyText}>Nenhuma ação identificada.</Text>}</>;
     if (tab === 'Prazos') return normalizedDeadlines.length ? normalizedDeadlines.map((item, index) => { const due = deadlineDate(item); const recurring = item.recorrencia === 'mensal'; return <DetailCard key={`${item.descricao}-${due}-${index}`} style={styles.dataCard}><View style={styles.dataCopy}><Text style={styles.dataTitle}>{item.descricao}</Text>{due ? <Text style={styles.dataHint}>{date(due)}{recurring ? ' · recorrência mensal' : ''}</Text> : null}</View>{due ? <Pressable onPress={() => reminder(due)} style={styles.smallButton}><Text style={styles.smallButtonText}>Lembrar</Text></Pressable> : null}</DetailCard>; }) : <Text style={styles.emptyText}>Nenhum prazo identificado.</Text>;
     if (tab === 'Custos') return normalizedCosts.length ? normalizedCosts.map((item, index) => <DetailCard key={`${item.description}-${item.amount}-${index}`} style={styles.dataCard}><View style={styles.dataCopy}><Text style={styles.dataTitle}>{item.description}</Text>{item.amount ? <Text style={styles.dataHint}>{item.amount}</Text> : null}</View></DetailCard>) : <Text style={styles.emptyText}>Nenhum custo identificado.</Text>;
-    if (tab === 'Avisos') return (doc.analysis_warnings || []).length ? doc.analysis_warnings.map((item, index) => { const tone = warningTone(item); return <DetailCard key={index} style={[styles.warningCard, styles[`warning${tone.key}`]]}><View style={styles.warningIcon}><TriangleAlert size={17} color={tone.color} /></View><View style={styles.warningCopy}><Text style={[styles.warningLabel, { color: tone.color }]}>{tone.label}</Text><Text style={styles.actionText}>{typeof item === 'string' ? item : item.descricao || item.description}</Text></View></DetailCard>; }) : <Text style={styles.emptyText}>Nenhum aviso identificado.</Text>;
+    if (tab === 'Avisos') return normalizedWarnings.length ? normalizedWarnings.map((item, index) => { const tone = warningTone(item); return <DetailCard key={`${item.descricao}-${index}`} style={[styles.warningCard, styles[`warning${tone.key}`]]}><View style={styles.warningIcon}><TriangleAlert size={17} color={tone.color} /></View><View style={styles.warningCopy}><Text style={[styles.warningLabel, { color: tone.color }]}>{tone.label}</Text><Text style={styles.actionText}>{item.descricao}</Text></View></DetailCard>; }) : <Text style={styles.emptyText}>Nenhum aviso identificado.</Text>;
     return <DetailCard><Text selectable style={styles.summary}>{doc.extracted_text || 'O texto extraído ficará disponível quando o processamento terminar.'}</Text><Pressable onPress={async () => { await Clipboard.setStringAsync(doc.extracted_text || ''); Alert.alert('Texto copiado'); }} style={styles.copyButton}><Copy size={15} color="#91E0D8" /><Text style={styles.copyText}>Copiar texto</Text></Pressable></DetailCard>;
   };
   return <ScrollView style={common.screen} contentContainerStyle={styles.content}>
