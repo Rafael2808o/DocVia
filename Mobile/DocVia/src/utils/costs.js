@@ -5,12 +5,13 @@ function textKey(value) {
 export function parseBrl(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   const raw = String(value ?? '').trim();
-  if (!raw) return null;
+  if (!raw || /%/.test(raw)) return null;
+  const negative = /[-−]\s*(?:R\$|BRL)|^\s*\(|\)\s*$/.test(raw);
   const numeric = raw.replace(/[^\d,.-]/g, '');
   if (!numeric || !/\d/.test(numeric)) return null;
   const normalized = numeric.includes(',') ? numeric.replace(/\./g, '').replace(',', '.') : numeric;
   const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) ? (negative ? -Math.abs(parsed) : parsed) : null;
 }
 
 export function formatBrl(value) {
@@ -51,7 +52,24 @@ function cleanDescription(value, numericAmount) {
   return result.replace(/[\s:;-]+$/, '').trim() || 'Custo';
 }
 
-export function normalizeCosts(items, sourceText = '') {
+function normalizeStructuredCosts(structuredItems) {
+  const seen = new Set();
+  return structuredItems.filter((item) => {
+    const fingerprint = `${item.type}|${item.value}|${item.unit || ''}|${textKey(item.label)}`;
+    if (seen.has(fingerprint)) return false;
+    seen.add(fingerprint);
+    return true;
+  }).map((item) => ({
+    description: item.label || 'Informação financeira',
+    amount: item.display_value || String(item.raw_value || ''),
+    type: item.type || 'MONEY', category: item.category || 'value',
+    conditional: Boolean(item.conditional), unit: item.unit || null,
+    source: item.source || null,
+  }));
+}
+
+export function normalizeCosts(items, sourceText = '', structuredItems = []) {
+  if (Array.isArray(structuredItems) && structuredItems.length) return normalizeStructuredCosts(structuredItems);
   const baseAmount = sourceBaseAmount(sourceText);
   const sourceItems = [];
   if (baseAmount) sourceItems.push({ description: /mensal/i.test(sourceText) ? 'Valor mensal' : 'Valor principal', amount: formatBrl(baseAmount) });
@@ -71,11 +89,11 @@ export function normalizeCosts(items, sourceText = '') {
     let amount = '';
     if (percentage && baseAmount && ['multa', 'juros'].includes(kind)) {
       const suffix = kind === 'juros' && /\b(?:ao|por)\s+m[eê]s|mensal/i.test(rawDescription) ? '/mês' : '';
-      amount = `${formatBrl(baseAmount * percentage / 100)}${suffix} (${String(percentage).replace('.', ',')}% de ${formatBrl(baseAmount)})`;
-    } else if (numericAmount !== null && numericAmount > 0) {
-      amount = formatBrl(numericAmount);
+      amount = `${String(percentage).replace('.', ',')}% de ${formatBrl(baseAmount)} · estimativa: ${formatBrl(baseAmount * percentage / 100)}${suffix}`;
     } else if (percentage) {
       amount = `${String(percentage).replace('.', ',')}%${/valor devido/i.test(rawDescription) ? ' sobre o valor devido' : ''}`;
+    } else if (numericAmount !== null && numericAmount !== 0) {
+      amount = formatBrl(numericAmount);
     } else if (String(rawAmount).trim() && numericAmount === null) {
       amount = String(rawAmount).trim();
     }
@@ -84,7 +102,7 @@ export function normalizeCosts(items, sourceText = '') {
     if (seen.has(exactKey) || (['multa', 'juros', 'mensalidade'].includes(kind) && seen.has(semanticKey))) continue;
     seen.add(exactKey);
     seen.add(semanticKey);
-    result.push({ description, amount });
+    result.push({ description, amount, category: percentage ? 'rule' : numericAmount < 0 ? 'credit' : 'value', conditional: /\b(?:em caso|caso|se\s|multa|juros)\b/i.test(rawDescription) });
   }
   return result;
 }

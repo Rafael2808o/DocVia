@@ -94,8 +94,8 @@ test('remove custo duplicado e calcula multa e juros quando a base está clara',
     ], source);
     assert.deepEqual(costs, [
         { description: 'Valor mensal', amount: 'R$ 2.500,00' },
-        { description: 'Multa de 2% sobre o valor devido', amount: 'R$ 50,00 (2% de R$ 2.500,00)' },
-        { description: 'Juros de 1% ao mês', amount: 'R$ 25,00/mês (1% de R$ 2.500,00)' },
+        { description: 'Multa de 2% sobre o valor devido', amount: '2% de R$ 2.500,00 · estimativa: R$ 50,00' },
+        { description: 'Juros de 1% ao mês', amount: '1% de R$ 2.500,00 · estimativa: R$ 25,00/mês' },
     ]);
 });
 
@@ -113,8 +113,8 @@ test('recupera custos do texto quando o provedor omite a lista', () => {
     const source = 'Valor mensal de R$ 2.500,00. Em atraso, multa de 2% sobre o valor devido e juros de 1% ao mês.';
     assert.deepEqual(normalizeCostItems([], source), [
         { description: 'Valor mensal', amount: 'R$ 2.500,00' },
-        { description: 'multa de 2% sobre o valor devido e juros de 1% ao mês', amount: 'R$ 50,00 (2% de R$ 2.500,00)' },
-        { description: 'juros de 1% ao mês', amount: 'R$ 25,00/mês (1% de R$ 2.500,00)' },
+        { description: 'multa de 2% sobre o valor devido e juros de 1% ao mês', amount: '2% de R$ 2.500,00 · estimativa: R$ 50,00' },
+        { description: 'juros de 1% ao mês', amount: '1% de R$ 2.500,00 · estimativa: R$ 25,00/mês' },
     ]);
 });
 

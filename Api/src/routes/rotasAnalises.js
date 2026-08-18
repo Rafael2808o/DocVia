@@ -80,11 +80,13 @@ router.get('/:id/analysis', autenticarToken, validarUuidParam(), asyncHandler(as
     const resultado = analise.rows[0];
     const actionItems = resultado.raw_ai_response?.action_items ?? [];
     const evidence = resultado.raw_ai_response?.evidence ?? [];
+    const structuredAnalysis = resultado.raw_ai_response?.structured_analysis ?? null;
 
     return res.status(200).json({
         ...resultado,
         action_items: actionItems,
         evidence,
+        structured_analysis: structuredAnalysis,
     });
 }));
 

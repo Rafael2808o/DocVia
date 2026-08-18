@@ -10,6 +10,7 @@ import { parseBoletoInfo } from '../services/boletoService.js';
 import { enfileirarJob, enfileirarJobUnico } from '../services/jobService.js';
 import { logger } from '../../config/logger.js';
 import { env } from '../../config/env.js';
+import { analyzeDocumentSemantics, financialItemsToLegacyCosts } from '../services/documentSemanticsService.js';
 
 const router = Router();
 
@@ -152,6 +153,7 @@ router.get('/', autenticarToken, asyncHandler(async (req, res) => {
                 a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
                 a.raw_ai_response->'action_items' AS analysis_action_items,
+                a.raw_ai_response->'structured_analysis' AS analysis_structured,
                 a.created_at AS analysis_created_at
          FROM documents d
          LEFT JOIN LATERAL (
@@ -231,6 +233,7 @@ router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req,
                 a.summary AS analysis_summary, a.deadlines AS analysis_deadlines,
                 a.costs AS analysis_costs, a.warnings AS analysis_warnings,
                 a.raw_ai_response->'action_items' AS analysis_action_items,
+                a.raw_ai_response->'structured_analysis' AS analysis_structured,
                 a.created_at AS analysis_created_at
          FROM documents d
          LEFT JOIN LATERAL (
@@ -248,7 +251,16 @@ router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req,
         throw new AppError('Documento não encontrado', 404);
     }
 
-    return res.status(200).json(resultado.rows[0]);
+    const document = resultado.rows[0];
+    if (!document.analysis_structured && document.extracted_text && document.analysis_summary) {
+        const structured = analyzeDocumentSemantics(document.extracted_text, { summary: document.analysis_summary }, document.document_type);
+        document.analysis_structured = structured;
+        const semanticCosts = financialItemsToLegacyCosts(structured.financial_items);
+        if (semanticCosts.length) document.analysis_costs = semanticCosts;
+        if (structured.warnings.length) document.analysis_warnings = [...(document.analysis_warnings || []), ...structured.warnings];
+        document.analysis_summary = structured.summary || document.analysis_summary;
+    }
+    return res.status(200).json(document);
 }));
 
 /**

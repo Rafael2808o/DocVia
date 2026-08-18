@@ -166,5 +166,14 @@ export function normalizeDeadlines(items, sourceText = '', now = new Date()) {
   if (paymentDay && !result.some((item) => /pagamento|mensalidade/i.test(item.descricao) && item.recorrencia === 'mensal')) {
     result.push({ descricao: `Pagamento mensal até o dia ${paymentDay}`, data: extractDueDate(`todo dia ${paymentDay}`, now), recorrencia: 'mensal' });
   }
+  const implementation = source.match(/implanta[cç][aã]o[^.!?\n]{0,140}?at[eé]\s+(\d+)\s+dias?\s+(?:úteis|uteis)[^.!?\n]{0,100}?(?:assinatura|assinad[oa])[^.!?\n]{0,80}?([0-3]?\d[/-][0-1]?\d[/-]\d{4})/i);
+  if (implementation) {
+    result = result.filter((item) => !/implanta[cç][aã]o/i.test(item.descricao));
+    result.push({
+      descricao: `Implantação em até ${implementation[1]} dias úteis após ${implementation[2]}`,
+      data: null, type: 'IMPLEMENTATION_DEADLINE', duration: Number(implementation[1]),
+      duration_unit: 'BUSINESS_DAY', base_date: extractDueDate(implementation[2], now),
+    });
+  }
   return dedupeDeadlines(result.filter((item) => item.data || item.recorrencia || /\b(?:\d+\s*(?:horas?|dias?|semanas?|meses?|anos?)|hoje|amanh[aã]|segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo|fim\s+do\s+m[eê]s|pr[oó]xima\s+semana|[àa]s?\s+\d{1,2}(?::\d{2}|h\d{0,2})?)\b/i.test(item.descricao)));
 }

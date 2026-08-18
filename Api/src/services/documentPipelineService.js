@@ -56,11 +56,18 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
         }
 
         const resultadoIA = await analisarDocumentoComIA(documento.extracted_text, documento.document_type);
+        logger.info({
+            documentId,
+            financialEntities: resultadoIA.structured_analysis?.financial_items?.length || 0,
+            semanticDates: resultadoIA.structured_analysis?.dates?.length || 0,
+            conflicts: resultadoIA.structured_analysis?.conflicts?.length || 0,
+            warnings: resultadoIA.warnings.length,
+        }, 'Análise semântica concluída');
         const generatedTitle = String(resultadoIA.title || resultadoIA.summary || '').split(/[.!?]/)[0].trim().slice(0, 60);
         const cliente = await BD.connect();
         try {
             await cliente.query('BEGIN');
-            await cliente.query(`INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response) VALUES ($1, $2, $3, $4, $5, $6)`, [documentId, resultadoIA.summary, JSON.stringify(resultadoIA.deadlines), JSON.stringify(resultadoIA.costs), JSON.stringify(resultadoIA.warnings), JSON.stringify({ provider: resultadoIA.provider, action_items: resultadoIA.action_items, evidence: resultadoIA.evidence })]);
+            await cliente.query(`INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response) VALUES ($1, $2, $3, $4, $5, $6)`, [documentId, resultadoIA.summary, JSON.stringify(resultadoIA.deadlines), JSON.stringify(resultadoIA.costs), JSON.stringify(resultadoIA.warnings), JSON.stringify({ provider: resultadoIA.provider, action_items: resultadoIA.action_items, evidence: resultadoIA.evidence, structured_analysis: resultadoIA.structured_analysis })]);
             for (const prazo of resultadoIA.deadlines) if (/^\d{4}-\d{2}-\d{2}$/.test(prazo.data || '')) await cliente.query('INSERT INTO document_deadlines (document_id, description, due_date) VALUES ($1, $2, $3)', [documentId, prazo.descricao || 'Prazo identificado', prazo.data]);
             await cliente.query(`UPDATE documents SET original_name = CASE WHEN storage_url = 'text://manual-entry' AND original_name = 'Texto digitado' AND $2 <> '' THEN $2 ELSE original_name END, status = 'done', error_message = NULL, updated_at = NOW() WHERE id = $1`, [documentId, generatedTitle]);
             await cliente.query('COMMIT');
