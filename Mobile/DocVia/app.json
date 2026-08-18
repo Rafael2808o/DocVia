@@ -4,17 +4,22 @@
     "slug": "docvia",
     "owner": "docvia-app",
     "description": "Organize documentos, identifique prazos e entenda pontos importantes com apoio de inteligência artificial.",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "scheme": "docvia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.docvia.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "allowBackup": false,
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS"
@@ -36,7 +41,8 @@
       "package": "br.com.docvia.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "extra": {
       "eas": {

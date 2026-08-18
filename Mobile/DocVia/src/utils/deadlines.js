@@ -147,6 +147,7 @@ export function normalizeDeadlines(items, sourceText = '', now = new Date()) {
   let result = (Array.isArray(items) ? items : []).map((item) => ({
     descricao: deadlineDescription(item),
     data: deadlineDate(item, now),
+    ...(typeof item === 'object' && item?.date_origin ? { date_origin: item.date_origin } : {}),
     ...(typeof item === 'object' && String(item?.recorrencia || item?.recurrence || '').toLowerCase() === 'mensal' ? { recorrencia: 'mensal' } : {}),
   }));
   const source = String(sourceText || '');
@@ -164,7 +165,7 @@ export function normalizeDeadlines(items, sourceText = '', now = new Date()) {
   const paymentMatch = source.match(/pagamento[^.!?\n]{0,120}?(?:at[eé]|vence(?:r[aá])?)\s+(?:o|no)?\s*dia\s+([1-9]|[12]\d|3[01])\s+de\s+cada\s+m[eê]s/i);
   const paymentDay = Number(paymentMatch?.[1] || 0);
   if (paymentDay && !result.some((item) => /pagamento|mensalidade/i.test(item.descricao) && item.recorrencia === 'mensal')) {
-    result.push({ descricao: `Pagamento mensal até o dia ${paymentDay}`, data: extractDueDate(`todo dia ${paymentDay}`, now), recorrencia: 'mensal' });
+    result.push({ descricao: `Pagamento mensal até o dia ${paymentDay}`, data: extractDueDate(`todo dia ${paymentDay}`, now), recorrencia: 'mensal', date_origin: 'DERIVED' });
   }
   const implementation = source.match(/implanta[cç][aã]o[^.!?\n]{0,140}?at[eé]\s+(\d+)\s+dias?\s+(?:úteis|uteis)[^.!?\n]{0,100}?(?:assinatura|assinad[oa])[^.!?\n]{0,80}?([0-3]?\d[/-][0-1]?\d[/-]\d{4})/i);
   if (implementation) {

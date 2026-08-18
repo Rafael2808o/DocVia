@@ -22,6 +22,11 @@ npm test
 
 Nome do controlador e e-mail de privacidade podem ser substituídos pelas variáveis documentadas em `.env.example`.
 
+O link único `/baixar/` usa `NEXT_PUBLIC_ANDROID_INSTALL_URL` para o APK/EAS e
+`NEXT_PUBLIC_IOS_INSTALL_URL` para o TestFlight/App Store. O botão iOS permanece
+desabilitado até existir uma build válida da Apple, evitando prometer um APK
+incompatível a usuários de iPhone.
+
 ## Publicação
 
 ```bash

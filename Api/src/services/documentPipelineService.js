@@ -19,7 +19,7 @@ export async function extrairTextoDoDocumento({ documentId }) {
     }
     await setState(documentId, 'processing');
     try {
-        logger.info({ documentId, mime: documento.mime_type, storageUrl: documento.storage_url }, 'Iniciando extração de documento');
+        logger.info({ documentId, mime: documento.mime_type, storageBackend: documento.storage_url?.split(':')[0] }, 'Iniciando extração de documento');
         const buffer = await lerArquivoPorUrl(documento.storage_url);
         if (!arquivoCorrespondeAoMime({ buffer, mimetype: documento.mime_type })) {
             throw new AppError('O arquivo enviado está corrompido ou não corresponde ao formato informado. Envie-o novamente.', 422);
@@ -32,14 +32,18 @@ export async function extrairTextoDoDocumento({ documentId }) {
 }
 
 export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
-    const resultado = await BD.query('SELECT id, original_name, storage_url, document_type, extracted_text, status FROM documents WHERE id = $1 AND user_id = $2', [documentId, userId]);
-    const documento = resultado.rows[0];
-    if (!documento) throw new AppError('Documento não encontrado', 404);
-    if (documento.status === 'done') return;
-    if (!documento.extracted_text?.trim()) throw new AppError('O documento ainda não possui texto extraído para análise', 422);
-    await setState(documentId, 'analyzing');
+    const processingLock = await BD.connect();
+    const lockKey = `analyze:${documentId}`;
+    const acquired = await processingLock.query('SELECT pg_try_advisory_lock(hashtextextended($1::text, 0)) AS acquired', [lockKey]);
+    if (!acquired.rows[0]?.acquired) { processingLock.release(); return; }
     let usageReservationId;
     try {
+        const resultado = await BD.query('SELECT id, original_name, storage_url, document_type, extracted_text, status FROM documents WHERE id = $1 AND user_id = $2', [documentId, userId]);
+        const documento = resultado.rows[0];
+        if (!documento) throw new AppError('Documento não encontrado', 404);
+        if (documento.status === 'done') return;
+        if (!documento.extracted_text?.trim()) throw new AppError('O documento ainda não possui texto extraído para análise', 422);
+        await setState(documentId, 'analyzing');
         const quotaClient = await BD.connect();
         try {
             await quotaClient.query('BEGIN');
@@ -70,6 +74,10 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
         const cliente = await BD.connect();
         try {
             await cliente.query('BEGIN');
+            // Reprocessamento é substitutivo e atômico: nenhum resultado ou prazo
+            // obsoleto sobrevive à nova análise, e o estado done só é gravado no commit.
+            await cliente.query('DELETE FROM document_deadlines WHERE document_id = $1', [documentId]);
+            await cliente.query('DELETE FROM analyses WHERE document_id = $1', [documentId]);
             await cliente.query(`INSERT INTO analyses (document_id, summary, deadlines, costs, warnings, raw_ai_response) VALUES ($1, $2, $3, $4, $5, $6)`, [documentId, resultadoIA.summary, JSON.stringify(resultadoIA.deadlines), JSON.stringify(resultadoIA.costs), JSON.stringify(resultadoIA.warnings), JSON.stringify({ provider: resultadoIA.provider, action_items: resultadoIA.action_items, evidence: resultadoIA.evidence, structured_analysis: resultadoIA.structured_analysis })]);
             for (const prazo of resultadoIA.deadlines) if (/^\d{4}-\d{2}-\d{2}$/.test(prazo.data || '')) await cliente.query('INSERT INTO document_deadlines (document_id, description, due_date) VALUES ($1, $2, $3)', [documentId, prazo.descricao || 'Prazo identificado', prazo.data]);
             await cliente.query(`UPDATE documents SET original_name = CASE WHEN storage_url = 'text://manual-entry' AND original_name = 'Texto digitado' AND $2 <> '' THEN $2 ELSE original_name END, status = 'done', error_message = NULL, updated_at = NOW() WHERE id = $1`, [documentId, generatedTitle]);
@@ -80,6 +88,9 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
             await BD.query('DELETE FROM usage_logs WHERE id = $1 AND user_id = $2', [usageReservationId, userId]).catch((cleanupError) => logger.error({ err: cleanupError, usageReservationId }, 'Falha ao liberar reserva de cota'));
         }
         throw erro;
+    } finally {
+        await processingLock.query('SELECT pg_advisory_unlock(hashtextextended($1::text, 0))', [lockKey]).catch(() => undefined);
+        processingLock.release();
     }
 }
 

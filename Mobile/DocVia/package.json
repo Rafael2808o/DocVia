@@ -1,6 +1,6 @@
 {
   "name": "docvia",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "index.js",
   "dependencies": {
     "expo": "~57.0.14",
@@ -32,6 +32,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:preview:android": "eas build --platform android --profile preview",
+    "build:preview:ios": "eas build --platform ios --profile preview",
+    "build:production:all": "eas build --platform all --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check ."

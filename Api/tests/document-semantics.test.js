@@ -143,3 +143,80 @@ test('separa obrigação fundamentada de recomendação da análise', () => {
   assert.equal(result.obligations.length, 1);
   assert.equal(result.recommended_actions.length, 1);
 });
+
+test('classifica SLA como disponibilidade e não como desconto', () => {
+  const result = analyzeDocumentSemantics('O SLA mensal de disponibilidade será de 99,95%. Crédito de SLA limitado a 5%.', { summary: 'SLA.' });
+  assert.equal(result.financial_items.find((item) => item.value === 99.95)?.type, 'SLA_AVAILABILITY');
+  assert.notEqual(result.financial_items.find((item) => item.value === 99.95)?.type, 'DISCOUNT');
+  assert.equal(result.financial_items.find((item) => item.value === 5)?.type, 'SLA_CREDIT_RATE');
+});
+
+test('não cria custo a partir de conteúdo instrucional com percentual e dinheiro', () => {
+  const result = analyzeDocumentSemantics('INSTRUÇÕES\nNão transformar 2,75% em R$ 2,75. Apenas para fins ilustrativos.', { summary: 'Instrução.' });
+  assert.equal(result.financial_items.length, 0);
+});
+
+test('isola polaridade de crédito e total na mesma frase', () => {
+  const result = analyzeDocumentSemantics('Após crédito de R$ 42.000,00, o total é R$ 321.100,00.', { summary: 'Valores.' });
+  assert.equal(result.financial_items.find((item) => item.value === -42000)?.type, 'CREDIT');
+  assert.equal(result.financial_items.find((item) => item.value === 321100)?.type, 'TOTAL');
+});
+
+test('relaciona valor bruto menos crédito ao total líquido sem dupla contagem', () => {
+  const result = analyzeDocumentSemantics('Soma bruta: R$ 363.100,00. Crédito permanente: R$ 42.000,00. Total após crédito: R$ 321.100,00.', { summary: 'Composição.' });
+  const relation = result.relationships.find((item) => item.type === 'BASE_MINUS_CREDIT_EQUALS_TOTAL');
+  assert.equal(relation?.status, 'MATCH');
+  assert.equal(relation?.calculated_result, 321100);
+  assert.equal(result.financial_items.find((item) => item.value === 321100)?.type, 'NET_TOTAL');
+});
+
+test('prazos distintos para produtos distintos não geram conflito', () => {
+  const result = analyzeDocumentSemantics('Produto A: aviso prévio de 75 dias.\nProduto B: aviso prévio de 45 dias.', { summary: 'Prazos.' });
+  assert.equal(result.deadline_rules.length, 2);
+  assert.notEqual(result.deadline_rules[0].scope, result.deadline_rules[1].scope);
+  assert.equal(result.conflicts.some((item) => item.type === 'DEADLINE_CONFLICT'), false);
+});
+
+test('mensalidades de períodos não sobrepostos não geram conflito', () => {
+  const result = analyzeDocumentSemantics('Nos primeiros 4 meses, mensalidade de R$ 300.000,00. Do 5º ao 12º mês, mensalidade de R$ 310.000,00. Após mês 12, mensalidade de R$ 318.600,00.', { summary: 'Fases.' });
+  assert.equal(result.financial_items.filter((item) => /MONTH/.test(item.period || '')).length, 3);
+  assert.equal(result.conflicts.some((item) => item.type === 'VALUE_CONFLICT'), false);
+});
+
+test('mensalidades divergentes em períodos sobrepostos continuam comparáveis', () => {
+  const result = analyzeDocumentSemantics('Meses 1 a 6: mensalidade de R$ 300.000,00. Meses 5 a 12: mensalidade de R$ 310.000,00.', { summary: 'Fases sobrepostas.' });
+  assert.equal(result.conflicts.some((item) => item.type === 'VALUE_CONFLICT'), true);
+});
+
+test('preserva cotação BRL por USD sem convertê-la em custo', () => {
+  const result = analyzeDocumentSemantics('Cotação contratual: 5,2437 BRL/USD.', { summary: 'Câmbio.' });
+  assert.equal(result.financial_items.length, 1);
+  assert.deepEqual({ type: result.financial_items[0].type, value: result.financial_items[0].value, currency: result.financial_items[0].currency }, { type: 'EXCHANGE_RATE', value: 5.2437, currency: null });
+});
+
+test('valida conversão cambial isolada sem absorver valor vizinho', () => {
+  const result = analyzeDocumentSemantics('Referência R$ 10,00.\n18.750 USD × 5,2437 BRL/USD = R$ 98.319,38\nOutra taxa R$ 20,00.', { summary: 'Conversão.' });
+  const calculation = result.calculations.find((item) => item.type === 'CURRENCY_CONVERSION');
+  assert.equal(calculation?.status, 'MATCH');
+  assert.equal(calculation?.components.length, 2);
+});
+
+test('remove todos os marcadores internos da estrutura apresentada', () => {
+  const result = analyzeDocumentSemantics('[[TABLE page=1 index=1]]\nItem\t1 TB\tR$ 50,00/TB\tR$ 50,00\n[[/TABLE]]', { summary: '[[TABLE]] Resumo [[/TABLE]]' });
+  assert.equal(JSON.stringify(result).includes('[[TABLE'), false);
+  assert.equal(JSON.stringify(result).includes('[[/TABLE]]'), false);
+  assert.deepEqual({ page: result.financial_items[0].source.page, table: result.financial_items[0].source.table, row: result.financial_items[0].source.row }, { page: 1, table: 1, row: 1 });
+});
+
+test('fuzz de normalização monetária preserva centavos, separadores e sinal', () => {
+  let seed = 173;
+  for (let index = 0; index < 500; index += 1) {
+    seed = (seed * 48271) % 0x7fffffff;
+    const cents = seed % 100_000_000;
+    const expected = cents / 100;
+    const formatted = expected.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const variants = [`R$ ${formatted}`, `BRL ${formatted}`, `R$\u00a0${formatted}`, `R$ ${formatted.replace(/\./g, ' ')}`];
+    for (const variant of variants) assert.equal(parseBrazilianMoney(variant), expected);
+    assert.equal(parseBrazilianMoney(`(R$ ${formatted})`), -expected);
+  }
+});

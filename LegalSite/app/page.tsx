@@ -17,6 +17,7 @@ export default function Home() {
         </div>
       </header>
       <main className="cards" aria-label="Documentos e controles">
+        <a className="nav-card accent" href="/baixar/"><span>00</span><h2>Baixar o aplicativo</h2><p>Instale a versão correta no Android ou iPhone.</p><b>Escolher plataforma →</b></a>
         <a className="nav-card" href="/privacidade/"><span>01</span><h2>Política de Privacidade</h2><p>Dados coletados, finalidades, fornecedores, segurança e seus direitos.</p><b>Consultar →</b></a>
         <a className="nav-card" href="/termos/"><span>02</span><h2>Termos de Uso</h2><p>Regras do serviço, limites da inteligência artificial e responsabilidades.</p><b>Consultar →</b></a>
         <a className="nav-card accent" href="/excluir-conta/"><span>03</span><h2>Excluir conta e dados</h2><p>Exclusão pelo aplicativo ou solicitação pelo canal de privacidade.</p><b>Solicitar →</b></a>

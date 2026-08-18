@@ -6,7 +6,30 @@ Aplicativo Expo/React Native para leitura segura de documentos com a API DocVia.
 
 1. Use Node.js 22.13 ou superior (requisito do Expo SDK 57).
 2. Copie `.env.example` para `.env` e defina `EXPO_PUBLIC_API_URL`.
-3. Execute `npm install` e `npm run android`.
+3. Execute `npm install` e `npm run android` (Android) ou `npm run ios` (macOS com Xcode).
+
+## Instalação em Android e iPhone
+
+APK é um formato exclusivo do Android e nunca será instalável no iPhone. O mesmo
+código do DocVia deve ser distribuído em dois artefatos:
+
+- Android: APK para teste interno ou AAB para Google Play;
+- iPhone/iPad: build iOS para TestFlight/App Store (ou distribuição interna com
+  os aparelhos previamente registrados na conta Apple Developer).
+
+Os perfis EAS estão prontos para as duas plataformas:
+
+```bash
+npm run build:preview:android
+npm run build:preview:ios
+npm run build:production:all
+npm run submit:ios
+```
+
+O perfil `preview` do iOS exige conta Apple Developer e cadastro dos aparelhos.
+Para um link público que funcione em qualquer iPhone, publique a build de
+produção no TestFlight/App Store e use o link fornecido pela Apple; o link do
+APK deve continuar disponível somente para Android.
 
 Para o emulador Android local, a URL padrão é `http://10.0.2.2:3000`. Em aparelho físico, use o IP local da máquina ou uma URL HTTPS pública.
 

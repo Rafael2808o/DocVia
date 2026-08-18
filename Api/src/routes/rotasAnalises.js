@@ -26,11 +26,19 @@ const router = Router();
  */
 router.post('/:id/analyze', autenticarToken, validarUuidParam(), asyncHandler(async (req, res) => {
     const documento = await BD.query(
-            'SELECT * FROM documents WHERE id = $1 AND user_id = $2',
+            `UPDATE documents
+                SET status = 'extracted', error_message = NULL, updated_at = NOW()
+              WHERE id = $1 AND user_id = $2
+                AND status NOT IN ('processing', 'analyzing')
+                AND extracted_text IS NOT NULL AND BTRIM(extracted_text) <> ''
+          RETURNING id, extracted_text`,
             [req.params.id, req.usuario.id_usuario]
         );
 
     if (documento.rows.length === 0) {
+        const existente = await BD.query('SELECT status, extracted_text FROM documents WHERE id = $1 AND user_id = $2', [req.params.id, req.usuario.id_usuario]);
+        if (existente.rows[0] && !existente.rows[0].extracted_text?.trim()) throw new AppError('O documento ainda não possui texto extraído para análise', 422);
+        if (existente.rows[0]) throw new AppError('Este documento já está sendo processado', 409);
         throw new AppError('Documento não encontrado', 404);
     }
 

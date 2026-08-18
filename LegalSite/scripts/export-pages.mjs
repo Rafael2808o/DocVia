@@ -12,7 +12,7 @@ const assets = {
   fetch: async () => new Response("Not found", { status: 404 }),
 };
 
-const routes = ["/", "/privacidade", "/termos", "/excluir-conta"];
+const routes = ["/", "/baixar", "/privacidade", "/termos", "/excluir-conta"];
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });

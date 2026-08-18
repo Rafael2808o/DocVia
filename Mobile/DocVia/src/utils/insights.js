@@ -27,7 +27,7 @@ export function uniqueInsights(items) {
 
 export function normalizeWarnings(items, sourceText = '') {
   const sourceItems = String(sourceText || '').split(/(?<=[.!?])|\n/).map((value) => value.trim()).filter(Boolean).flatMap((sentence) => {
-    if (/descumprimento[^.!?]{0,100}rescis[aã]o|rescis[aã]o\s+imediata/i.test(sentence)) return [{ descricao: sentence, prioridade: 'critico' }];
+    if (/descumprimento[^.!?]{0,100}rescis[aã]o|rescis[aã]o\s+imediata/i.test(sentence)) return [{ descricao: sentence, prioridade: /\b(?:se|caso|em\s+caso|poder[aá])\b/i.test(sentence) ? 'atencao' : 'critico' }];
     if (/atraso[^.!?]{0,120}(?:multa|juros)|(?:multa|juros)[^.!?]{0,120}(?:atraso|inadimpl)/i.test(sentence)) return [{ descricao: sentence, prioridade: 'atencao' }];
     return [];
   });

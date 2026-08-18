@@ -10,7 +10,7 @@ import { parseBoletoInfo } from '../services/boletoService.js';
 import { enfileirarJob, enfileirarJobUnico } from '../services/jobService.js';
 import { logger } from '../../config/logger.js';
 import { env } from '../../config/env.js';
-import { analyzeDocumentSemantics, financialItemsToLegacyCosts } from '../services/documentSemanticsService.js';
+import { analyzeDocumentSemantics, financialItemsToLegacyCosts, sanitizeContractText } from '../services/documentSemanticsService.js';
 
 const router = Router();
 
@@ -107,7 +107,7 @@ router.post(
                 [req.usuario.id_usuario, req.file.originalname, document_type, arquivoSalvo.url, arquivoSalvo.caminho, req.file.mimetype]
             );
 
-            logger.info({ documentId: resultado.rows[0].id, storagePath: arquivoSalvo.caminho, storageUrl: arquivoSalvo.url, mime: req.file.mimetype }, 'Upload de documento persistido');
+            logger.info({ documentId: resultado.rows[0].id, storageBackend: arquivoSalvo.url?.split(':')[0], mime: req.file.mimetype }, 'Upload de documento persistido');
             const job = await enfileirarJobUnico('extract_document_text', { documentId: resultado.rows[0].id, userId: req.usuario.id_usuario });
 
             return res.status(202).json({
@@ -260,6 +260,7 @@ router.get('/:id', autenticarToken, validarUuidParam(), asyncHandler(async (req,
         if (structured.warnings.length) document.analysis_warnings = [...(document.analysis_warnings || []), ...structured.warnings];
         document.analysis_summary = structured.summary || document.analysis_summary;
     }
+    document.extracted_text = sanitizeContractText(document.extracted_text);
     return res.status(200).json(document);
 }));
 
