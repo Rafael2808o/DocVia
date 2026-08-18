@@ -1,6 +1,6 @@
 {
   "name": "docvia",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "index.js",
   "dependencies": {
     "expo": "~57.0.14",

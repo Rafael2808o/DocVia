@@ -64,6 +64,10 @@ function normalizeStructuredCosts(structuredItems) {
     amount: item.display_value || String(item.raw_value || ''),
     type: item.type || 'MONEY', category: item.category || 'value',
     conditional: Boolean(item.conditional), unit: item.unit || null,
+    quantity: item.quantity ?? null, quantity_unit: item.quantity_unit || null,
+    unit_price: item.unit_price ?? null, price_unit: item.price_unit || null,
+    subtotal: item.subtotal ?? null, validation: item.validation || null,
+    base_currency: item.base_currency || null, quote_currency: item.quote_currency || null,
     source: item.source || null,
   }));
 }

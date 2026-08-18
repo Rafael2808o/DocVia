@@ -4,7 +4,7 @@
     "slug": "docvia",
     "owner": "docvia-app",
     "description": "Organize documentos, identifique prazos e entenda pontos importantes com apoio de inteligência artificial.",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "scheme": "docvia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "android": {
       "allowBackup": false,
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS"

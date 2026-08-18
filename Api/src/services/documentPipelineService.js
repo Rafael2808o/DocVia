@@ -61,6 +61,9 @@ export async function analisarDocumentoEmSegundoPlano({ documentId, userId }) {
             financialEntities: resultadoIA.structured_analysis?.financial_items?.length || 0,
             semanticDates: resultadoIA.structured_analysis?.dates?.length || 0,
             conflicts: resultadoIA.structured_analysis?.conflicts?.length || 0,
+            tabularLineItems: resultadoIA.structured_analysis?.financial_items?.filter((item) => item.type === 'LINE_ITEM').length || 0,
+            calculationMemories: resultadoIA.structured_analysis?.calculations?.length || 0,
+            failedMathValidations: resultadoIA.structured_analysis?.math_validations?.filter((item) => item.status === 'MISMATCH').length || 0,
             warnings: resultadoIA.warnings.length,
         }, 'Análise semântica concluída');
         const generatedTitle = String(resultadoIA.title || resultadoIA.summary || '').split(/[.!?]/)[0].trim().slice(0, 60);

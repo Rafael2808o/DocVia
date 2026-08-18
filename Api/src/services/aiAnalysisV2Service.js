@@ -296,7 +296,9 @@ export function normalizeAiResult(result, type = 'outro', now = new Date(), sour
       : ['informativo', 'info', 'low', 'baixa'].includes(rawPriority) ? 'informativo' : 'atencao';
     return { descricao: description(item).slice(0, 1_000), prioridade };
   }).filter((item) => item.descricao);
-  const semantics = analyzeDocumentSemantics(sourceText, { summary: result.summary.trim() }, type);
+  const textItems = (items) => (Array.isArray(items) ? items : []).map((item) => description(item).slice(0, 1_000)).filter(Boolean).filter((item, index, all) => all.findIndex((other) => textKey(other) === textKey(item)) === index);
+  const aiActions = textItems(result.action_items);
+  const semantics = analyzeDocumentSemantics(sourceText, { summary: result.summary.trim(), action_items: aiActions }, type);
   const semanticCosts = financialItemsToLegacyCosts(semantics.financial_items);
   if (semantics.implementation_terms.length) {
     deadlines = deadlines.filter((item) => !/implanta[cç][aã]o/i.test(item.descricao));
@@ -306,12 +308,11 @@ export function normalizeAiResult(result, type = 'outro', now = new Date(), sour
     })));
   }
   const warnings = dedupeWarnings([...baseWarnings, ...semantics.warnings]);
-  const textItems = (items) => (Array.isArray(items) ? items : []).map((item) => description(item).slice(0, 1_000)).filter(Boolean).filter((item, index, all) => all.findIndex((other) => textKey(other) === textKey(item)) === index);
   return {
     title: typeof result.title === 'string' ? result.title.trim().slice(0, 60) : '',
     summary: semantics.summary || result.summary.trim(), deadlines,
     costs: semanticCosts.length ? semanticCosts : fallbackCosts, warnings,
-    action_items: textItems(result.action_items), evidence: textItems(result.evidence),
+    action_items: semantics.recommended_actions.map((item) => item.description), evidence: textItems(result.evidence),
     document_type: typeof result.document_type === 'string' ? result.document_type : type,
     structured_analysis: semantics,
   };

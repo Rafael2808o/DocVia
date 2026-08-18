@@ -84,3 +84,62 @@ test('integra auditoria determinística à resposta da IA e produz avisos acion�
   assert.equal(result.costs.some((item) => item.type === 'PENALTY_RATE' && item.amount === '2%'), true);
   assert.equal(result.warnings.some((item) => /divergentes|aviso prévio geral/i.test(item.descricao)), true);
 });
+
+test('recompõe linha tabular sem atribuir a unidade do preço ao subtotal', () => {
+  const text = 'Archive\t65 TB\tR$ 295,00/TB\tR$ 19.175,00';
+  const result = analyzeDocumentSemantics(text, { summary: 'Tabela de preços.' });
+  assert.equal(result.financial_items.length, 1);
+  const { type, quantity, quantity_unit, unit_price, price_unit, subtotal, unit } = result.financial_items[0];
+  assert.deepEqual({ type, quantity, quantity_unit, unit_price, price_unit, subtotal, unit }, { type: 'LINE_ITEM', quantity: 65, quantity_unit: 'TERABYTE', unit_price: 295, price_unit: 'TERABYTE', subtotal: 19175, unit: null });
+  assert.equal(result.math_validations[0].status, 'MATCH');
+});
+
+test('detecta subtotal matematicamente divergente sem substituir o valor informado', () => {
+  const result = analyzeDocumentSemantics('Licenças\t10 usuários\tR$ 25,00/usuário\tR$ 260,00', { summary: 'Tabela.' });
+  assert.equal(result.financial_items[0].subtotal, 260);
+  assert.equal(result.math_validations[0].calculated_subtotal, 250);
+  assert.equal(result.conflicts.some((item) => item.type === 'CALCULATION_MISMATCH'), true);
+});
+
+test('usa a unidade da quantidade em tabela quando o preço não repete o sufixo', () => {
+  const item = analyzeDocumentSemantics('Usuários excedentes\t46 usuários\tR$ 72,50\tR$ 3.335,00', { summary: 'Tabela.' }).financial_items[0];
+  assert.equal(item.unit_price, 72.5);
+  assert.equal(item.price_unit, 'USER');
+  assert.equal(item.subtotal, 3335);
+  assert.equal(item.unit, null);
+});
+
+test('preserva precisão de cotação sem tratá-la como preço unitário comum', () => {
+  const item = analyzeDocumentSemantics('Cotação aplicável: R$ 5,1874/USD.', { summary: 'Câmbio.' }).financial_items[0];
+  const { type, value, precision, base_currency, quote_currency } = item;
+  assert.deepEqual({ type, value, precision, base_currency, quote_currency }, { type: 'EXCHANGE_RATE', value: 5.1874, precision: 4, base_currency: 'USD', quote_currency: 'BRL' });
+});
+
+test('mantém memória de cálculo como estrutura única', () => {
+  const result = analyzeDocumentSemantics('Memória:\nR$ 3.335,00\n+ R$ 763,20\n+ R$ 2.590,00\n+ R$ 852,60\n= R$ 7.540,80', { summary: 'Cálculo.' });
+  assert.equal(result.financial_items.length, 0);
+  assert.deepEqual(result.calculations[0].components.map((item) => item.value), [3335, 763.2, 2590, 852.6]);
+  assert.equal(result.calculations[0].status, 'MATCH');
+});
+
+test('mantém valor calculado e faturado quando diferem', () => {
+  const result = analyzeDocumentSemantics('Conversão calculada: R$ 1.000,00. Valor informado na fatura: R$ 1.002,00.', { summary: 'Fatura.' });
+  assert.equal(result.financial_items.some((item) => item.type === 'CALCULATED_VALUE'), true);
+  assert.equal(result.financial_items.some((item) => item.type === 'INVOICE_TOTAL'), true);
+  assert.equal(result.financial_reconciliations[0].difference, 2);
+});
+
+test('ignora valor explicitamente ilustrativo e não duplica tabela extraída duas vezes', () => {
+  const line = 'Backup\t2 TB\tR$ 50,00/TB\tR$ 100,00';
+  const source = `EXEMPLO\nValor meramente ilustrativo: R$ 999,00\n${line}\n[[TABLE page=1 index=1]]\n${line}\n[[/TABLE]]`;
+  const result = analyzeDocumentSemantics(source, { summary: 'Preços.' });
+  assert.equal(result.financial_items.filter((item) => item.type === 'LINE_ITEM').length, 1);
+  assert.equal(result.financial_items.some((item) => item.value === 999), false);
+});
+
+test('separa obrigação fundamentada de recomendação da análise', () => {
+  const source = 'A contratante deverá entregar os acessos necessários.';
+  const result = analyzeDocumentSemantics(source, { summary: 'Contrato.', action_items: ['A contratante deverá entregar os acessos necessários', 'Verificar os dados bancários'] });
+  assert.equal(result.obligations.length, 1);
+  assert.equal(result.recommended_actions.length, 1);
+});
