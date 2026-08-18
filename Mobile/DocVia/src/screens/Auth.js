@@ -5,6 +5,7 @@ import { Eye, EyeOff, LockKeyhole, Mail, UserRound, X } from 'lucide-react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Input, Screen } from '../components/ui';
 import { authApi } from '../services/api';
+import { validateRegistrationEmail } from '../services/emailValidation';
 import { common, spacing } from '../theme';
 
 const accent = '#147D92';
@@ -41,9 +42,9 @@ export function Login({ login, go, onVerificationRequired }) {
   </AuthLayout>;
 }
 
-export function Register({ go, onRegistered }) {
+export function Register({ go, login }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [senha, setSenha] = useState(''); const [show, setShow] = useState(false); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const insets = useSafeAreaInsets();
-  const submit = async () => { if (!name || !email || senha.length < 8) return setError('Preencha os dados; a senha precisa de 8 caracteres.'); setLoading(true); const normalizedEmail = email.trim().toLowerCase(); try { await authApi.register(name, normalizedEmail, senha); onRegistered(normalizedEmail); } catch (e) { if (e.code === 'EMAIL_DELIVERY_FAILED') onRegistered(normalizedEmail); else setError(e.message); } finally { setLoading(false); } };
+  const submit = async () => { if (!name.trim() || !email || senha.length < 8) return setError('Preencha os dados; a senha precisa de 8 caracteres.'); setError(''); setLoading(true); try { const normalizedEmail = await validateRegistrationEmail(email); await authApi.register(name.trim(), normalizedEmail, senha); await login(normalizedEmail, senha); } catch (e) { setError(e.message); } finally { setLoading(false); } };
   return <AuthLayout style={{ paddingTop: insets.top + 30, paddingBottom: Math.max(insets.bottom, 24) }}>
     <Pressable accessibilityRole="button" accessibilityLabel="Voltar ao login" onPress={() => go('login')} style={({ pressed }) => [styles.close, pressed && styles.closePressed]}><X size={17} color="#858198" strokeWidth={1.8} /></Pressable>
     <View><Text style={styles.title}>Crie sua conta</Text><Text style={styles.subtitle}>Comece a entender seus documentos hoje.</Text></View>
@@ -60,7 +61,7 @@ export function Register({ go, onRegistered }) {
 
 export function Forgot({ go }) {
   const [email, setEmail] = useState(''); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false); const insets = useSafeAreaInsets();
-  const submit = async () => { if (!email) return setMessage('Informe seu e-mail para continuar.'); setLoading(true); try { await authApi.forgotPassword(email); setMessage('Se este e-mail estiver cadastrado, as instruções foram enviadas.'); } catch (e) { setMessage(e.message); } finally { setLoading(false); } };
+  const submit = async () => { if (!email) return setMessage('Informe seu e-mail para continuar.'); setLoading(true); try { await authApi.forgotPassword(email); setMessage('Solicitação recebida. Se o e-mail estiver cadastrado e o serviço de mensagens estiver disponível, você receberá as instruções. Confira também o spam.'); } catch (e) { setMessage(e.message); } finally { setLoading(false); } };
   return <AuthLayout style={{ paddingTop: insets.top + 30, paddingBottom: Math.max(insets.bottom, 24) }}>
     <Pressable accessibilityRole="button" accessibilityLabel="Voltar ao login" onPress={() => go('login')} style={({ pressed }) => [styles.close, pressed && styles.closePressed]}><X size={17} color="#858198" strokeWidth={1.8} /></Pressable>
     <View><Text style={styles.title}>Recupere sua senha</Text><Text style={styles.subtitle}>Informe seu e-mail para receber as instruções.</Text></View>

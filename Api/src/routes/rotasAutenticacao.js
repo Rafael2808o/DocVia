@@ -11,6 +11,7 @@ import { criarTokenRedefinicao, consumirTokenRedefinicao, enviarEmailRedefinicao
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { criarTokenVerificacao, consumirTokenVerificacao, enviarEmailVerificacao } from '../services/emailVerificationService.js';
+import { validateEmailDomain } from '../services/emailDomainService.js';
 
 const router = Router();
 const SECRET_KEY = env.JWT_SECRET;
@@ -54,42 +55,31 @@ function gerarAccessToken(usuario) {
  */
 router.post('/register', limitadorAuth, validar(registerSchema), asyncHandler(async (req, res) => {
     const { nome, email, senha } = req.body;
+    await validateEmailDomain(email);
     const senhaHash = await bcrypt.hash(senha, 10);
-    const cliente = await BD.connect();
     let usuario;
-    let token;
     try {
-        await cliente.query('BEGIN');
-        const resultado = await cliente.query(
+        const resultado = await BD.query(
             `INSERT INTO users (name, email, password_hash, auth_provider, plan, email_verified_at)
-             VALUES ($1, $2, $3, 'email', 'free', NULL)
+             VALUES ($1, $2, $3, 'email', 'free', NOW())
              RETURNING id, name, email, plan, created_at`,
             [nome, email, senhaHash]
         );
         usuario = resultado.rows[0];
-        token = await criarTokenVerificacao(usuario.id, cliente);
-        await cliente.query('COMMIT');
     } catch (erro) {
-        await cliente.query('ROLLBACK').catch(() => undefined);
         if (erro.code === '23505') {
             throw new AppError('Não foi possível concluir o cadastro. Tente entrar ou recuperar sua senha.', 409);
         }
         throw erro;
-    } finally {
-        cliente.release();
     }
-
-    try {
-        await enviarEmailVerificacao(email, token);
-    } catch (erro) {
-        logger.error({ err: erro, userId: usuario.id }, 'Conta criada, mas o e-mail de verificação não foi enviado');
-        throw new AppError('Sua conta foi criada, mas o e-mail não pôde ser enviado. Use reenviar confirmação.', 503, 'EMAIL_DELIVERY_FAILED');
-    }
-
+    const accessToken = gerarAccessToken(usuario);
+    const refreshToken = await criarRefreshToken(usuario.id);
     return res.status(201).json({
-        message: 'Conta criada. Confirme o link enviado ao seu e-mail para entrar.',
-        requires_email_verification: true,
-        usuario,
+        message: 'Conta criada com sucesso.',
+        requires_email_verification: false,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        usuario: { id_usuario: usuario.id, nome: usuario.name, email: usuario.email, plan: usuario.plan },
     });
 }));
 
@@ -137,10 +127,6 @@ router.post('/login', limitadorAuth, validar(loginSchema), verificarBloqueioLogi
     if (!senhaCorreta) {
         await registrarFalhaLogin(email);
         throw new AppError('Email ou senha inválidos', 401);
-    }
-
-    if (!usuario.email_verified_at) {
-        throw new AppError('Confirme seu e-mail antes de entrar.', 403, 'EMAIL_NOT_VERIFIED');
     }
 
     await registrarSucessoLogin(email);
@@ -191,11 +177,6 @@ router.post('/refresh', validar(refreshSchema), asyncHandler(async (req, res) =>
     if (resultado.rows.length === 0) {
         throw new AppError('Usuário não encontrado', 401);
     }
-    if (!resultado.rows[0].email_verified_at) {
-        await revogarRefreshToken(refresh_token);
-        throw new AppError('Confirme seu e-mail antes de entrar.', 403, 'EMAIL_NOT_VERIFIED');
-    }
-
     const accessToken = gerarAccessToken(resultado.rows[0]);
     const novoRefreshToken = await criarRefreshToken(resultado.rows[0].id);
     return res.status(200).json({ access_token: accessToken, refresh_token: novoRefreshToken });

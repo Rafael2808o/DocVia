@@ -7,7 +7,7 @@ import NotificationCenter from '../components/NotificationCenter';
 import { documentsApi } from '../services/api';
 import { loadNotificationSettings } from '../services/notificationSettings';
 import { common } from '../theme';
-import { dateKey, deadlineDate, deadlineDescription, localDate } from '../utils/deadlines';
+import { dateKey, deadlineDate, deadlineDescription, localDate, normalizeDeadlines } from '../utils/deadlines';
 
 const primary = '#147D92';
 const weekNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -17,7 +17,7 @@ function remainingDays(value) { return Math.max(0, Math.ceil((localDate(value).s
 function dueLabel(value) { const days = remainingDays(value); return days === 0 ? 'Hoje' : `${days}d`; }
 function fullDate(value) { return localDate(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', ''); }
 function analysisDeadlines(documents) {
-  return documents.flatMap((document) => (document.analysis_deadlines || []).map((item, index) => {
+  return documents.flatMap((document) => normalizeDeadlines(document.analysis_deadlines || [], document.extracted_text || '').map((item, index) => {
     const description = deadlineDescription(item);
     const dueDate = deadlineDate(item);
     return dueDate ? { id: `${document.id}-${index}`, document_id: document.id, description, due_date: dueDate, original_name: document.original_name, document_type: document.document_type } : null;

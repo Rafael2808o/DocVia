@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, Vie
 import { ChevronRight, FileText, HeartPulse, ReceiptText, Search, Upload } from 'lucide-react-native';
 import { ErrorState, Skeleton } from '../components/ui';
 import { documentsApi } from '../services/api';
+import { reconcileDeadlineAlerts } from '../services/notificationSettings';
 import { common } from '../theme';
 import { date, typeLabel } from './shared';
 
@@ -43,7 +44,7 @@ function EmptyDocuments({ hasDocuments, onUpload }) {
 
 export default function DocumentsV2({ openDocument, navigate }) {
   const [documents, setDocuments] = useState(); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [type, setType] = useState('todos'); const [searchFocused, setSearchFocused] = useState(false); const [refreshing, setRefreshing] = useState(false);
-  const load = useCallback(async () => { try { setError(''); setDocuments(await documentsApi.list()); } catch (err) { setError(err.message); } }, []);
+  const load = useCallback(async () => { try { setError(''); const nextDocuments = await documentsApi.list(); setDocuments(nextDocuments); await reconcileDeadlineAlerts(nextDocuments).catch(() => undefined); } catch (err) { setError(err.message); } }, []);
   useEffect(() => { load(); }, [load]);
   const refresh = async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } };
   const filtered = useMemo(() => (documents || []).filter((document) => (type === 'todos' || document.document_type === type) && document.original_name.toLowerCase().includes(query.trim().toLowerCase())), [documents, query, type]);

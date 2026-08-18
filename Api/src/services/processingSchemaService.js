@@ -1,7 +1,9 @@
 import { BD } from '../../db.js';
 
 export async function garantirSchemaProcessamento() {
-    await BD.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ');
+    await BD.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ DEFAULT NOW()');
+    await BD.query('ALTER TABLE users ALTER COLUMN email_verified_at SET DEFAULT NOW()');
+    await BD.query('UPDATE users SET email_verified_at = NOW() WHERE email_verified_at IS NULL');
     await BD.query(`CREATE TABLE IF NOT EXISTS email_verification_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

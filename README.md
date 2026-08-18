@@ -113,9 +113,9 @@ Nunca inclua chaves, senhas, tokens ou arquivos `.env` no Git.
 
 ### E-mail transacional
 
-Os fluxos de confirmação de e-mail e recuperação de senha estão implementados e configurados para o Brevo. Novas contas só podem entrar depois de confirmar o link recebido; contas existentes ficam pendentes de nova confirmação ao aplicar a migração `005_email_verification.sql`, sem perder senhas ou documentos. Um reset de senha concluído também comprova a posse do endereço.
+O cadastro valida a sintaxe, rejeita provedores descartáveis conhecidos e exige que o domínio publique servidores MX capazes de receber mensagens. A conta entra imediatamente após o cadastro; a confirmação por link não bloqueia o acesso. Essa validação confirma o domínio, mas somente o envio de uma mensagem pode comprovar que uma caixa postal específica existe e pertence à pessoa.
 
-A conta do provedor precisa ter o envio transacional e o remetente aprovados antes de enviar mensagens reais em produção. Configure também `EMAIL_VERIFICATION_URL=docvia://verify-email`.
+A recuperação de senha continua exigindo um provedor transacional aprovado (Brevo, Resend ou SMTP). Sem ele, o sistema registra a solicitação de forma segura, mas não há como entregar o link de redefinição ao usuário.
 
 ## Endpoints principais
 

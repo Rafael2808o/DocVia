@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'email',
     plan VARCHAR(20) NOT NULL DEFAULT 'free',
     privacy_consent_at TIMESTAMPTZ,
-    email_verified_at TIMESTAMPTZ,
+    email_verified_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -124,7 +124,9 @@ CREATE TABLE IF NOT EXISTS public.email_verification_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.users ALTER COLUMN email_verified_at SET DEFAULT now();
+UPDATE public.users SET email_verified_at = now() WHERE email_verified_at IS NULL;
 
 DO $$
 BEGIN

@@ -3,10 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell, BellOff, CalendarDays, ChevronRight } from 'lucide-react-native';
 import { Button, Sheet } from './ui';
 import { loadNotificationSettings } from '../services/notificationSettings';
-import { deadlineDate, deadlineDescription } from '../utils/deadlines';
+import { deadlineDate, deadlineDescription, normalizeDeadlines } from '../utils/deadlines';
 
 function deadlineAlerts(documents) {
-  return documents.flatMap((document) => (document.analysis_deadlines || []).map((item, index) => {
+  return documents.flatMap((document) => normalizeDeadlines(document.analysis_deadlines || [], document.extracted_text || '').map((item, index) => {
     const description = deadlineDescription(item);
     const dueDateValue = deadlineDate(item);
     const dueDate = dueDateValue ? new Date(`${dueDateValue}T00:00:00`) : null;

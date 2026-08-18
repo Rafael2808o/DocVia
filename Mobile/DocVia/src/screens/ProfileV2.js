@@ -65,7 +65,7 @@ export default function ProfileV2({ user, onLogout, navigate }) {
 
   const saveAlerts = async (nextSettings) => {
     const settings = await saveNotificationSettings(nextSettings);
-    await scheduleDeadlineAlerts(documents, settings);
+    return scheduleDeadlineAlerts(documents, settings);
   };
 
   const changeAlerts = async (nextValue) => {
@@ -83,7 +83,14 @@ export default function ProfileV2({ user, onLogout, navigate }) {
       }
     }
     setAlertsEnabled(nextValue);
-    await saveAlerts({ alertsEnabled: nextValue, quietMode });
+    try {
+      const created = await saveAlerts({ alertsEnabled: nextValue, quietMode });
+      if (nextValue) Alert.alert('Alertas ativados', created ? `${created} lembrete${created === 1 ? '' : 's'} de prazo agendado${created === 1 ? '' : 's'} neste aparelho.` : 'Os alertas estão ativos. Novos lembretes serão criados quando houver prazos futuros.');
+    } catch (nextError) {
+      setAlertsEnabled(false);
+      await saveNotificationSettings({ alertsEnabled: false, quietMode });
+      Alert.alert('Não foi possível ativar os alertas', nextError.message || 'Tente novamente.');
+    }
   };
 
   const changeQuietMode = async (nextValue) => {
@@ -153,13 +160,12 @@ export default function ProfileV2({ user, onLogout, navigate }) {
       </Sheet>
       <NotificationCenter visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} documents={documents} onViewDeadlines={() => navigate?.('deadlines')} />
     </ScrollView>
-    <View pointerEvents="none" style={styles.navMask} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#020202' }, scroll: { flex: 1 }, content: { paddingHorizontal: 28, paddingTop: 68, paddingBottom: 210 }, navMask: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 112, backgroundColor: '#020202' },
+  page: { flex: 1, backgroundColor: '#020202' }, scroll: { flex: 1 }, content: { paddingHorizontal: 28, paddingTop: 68, paddingBottom: 210 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
   title: { color: '#F4F4F8', fontSize: 23, fontWeight: '800' }, subtitle: { color: '#818391', fontSize: 12, marginTop: 7 },
   notification: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#292B35', backgroundColor: '#111219', alignItems: 'center', justifyContent: 'center' },

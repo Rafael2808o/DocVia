@@ -7,7 +7,11 @@ import { expireSession, getSession, saveSession } from './session';
 let refreshInFlight: Promise<any> | null = null;
 
 function httpError(data: any, status: number) {
-  const error: any = new Error(data.message || 'Não foi possível concluir a operação.');
+  let message = String(data.message || 'Não foi possível concluir a operação.');
+  if (/rota\s+(?:GET|POST|PUT|PATCH|DELETE)\s+\S+\s+não encontrada|route\s+\S+\s+not found/i.test(message)) {
+    message = 'Este recurso ainda não está disponível. Atualize o aplicativo ou tente novamente mais tarde.';
+  }
+  const error: any = new Error(message);
   error.status = status;
   error.code = data.code;
   return error;
@@ -42,12 +46,12 @@ async function request(path: string, options: RequestInit = {}, retry = true): P
     const headers = new Headers(options.headers); const current = getSession();
     if (current?.accessToken) headers.set('Authorization', `Bearer ${current.accessToken}`);
     const response = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
-    const authRejected = response.status === 401 || response.status === 403;
+    const data = await response.json().catch(() => ({}));
+    const authRejected = response.status === 401 || (response.status === 403 && /token\s+(?:inválido|invalido|expirado)|token não fornecido/i.test(String(data.message || '')));
     if (authRejected && retry && current?.refreshToken) {
       try { await refreshAccess(current); return request(path, options, false); }
       catch (error: any) { if (error.status === 401 || error.status === 403) await expireSession(); throw error; }
     }
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       if (authRejected && current?.refreshToken) await expireSession();
       throw httpError(data, response.status);

@@ -7,9 +7,10 @@ import * as Sharing from 'expo-sharing';
 import { ArrowLeft, CalendarClock, Copy, FileDown, FileText, Trash2, TriangleAlert, WalletCards } from 'lucide-react-native';
 import { ErrorState, Skeleton } from '../components/ui';
 import { documentsApi } from '../services/api';
-import { loadNotificationSettings, scheduleSingleDeadlineReminder } from '../services/notificationSettings';
+import { loadNotificationSettings, reconcileDocumentDeadlineAlerts, scheduleSingleDeadlineReminder } from '../services/notificationSettings';
 import { common } from '../theme';
-import { deadlineDate } from '../utils/deadlines';
+import { formatBrl, normalizeCosts } from '../utils/costs';
+import { deadlineDate, normalizeDeadlines } from '../utils/deadlines';
 import { date, typeLabel } from './shared';
 
 const primary = '#147D92';
@@ -23,11 +24,6 @@ function warningTone(item) {
   if (['critico', 'crítico', 'critical', 'alta', 'high'].includes(priority) || /rescis|despejo|inadimpl|perda de prazo|multa.{0,20}(alta|3|três)/.test(text)) return { key: 'Critical', label: 'CRÍTICO', color: '#FF737D' };
   if (['informativo', 'info', 'baixa', 'low'].includes(priority)) return { key: 'Info', label: 'INFORMATIVO', color: '#7FD9D0' };
   return { key: 'Attention', label: 'ATENÇÃO', color: '#FFC52E' };
-}
-
-function formatBrl(value) {
-  const amount = Number(String(value ?? '').replace(/[^\d,.-]/g, '').replace(',', '.'));
-  return Number.isFinite(amount) ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount) : 'Valor nao identificado';
 }
 
 function normalizeDueDate(value) {
@@ -44,7 +40,7 @@ function boletoDueDate(document, boleto) {
 
 export default function DocumentDetail({ id, back }) {
   const [doc, setDoc] = useState(); const [tab, setTab] = useState('Resumo'); const [error, setError] = useState(''); const [boleto, setBoleto] = useState(); const [deleting, setDeleting] = useState(false); const [downloading, setDownloading] = useState(false);
-  const load = useCallback(async () => { try { setError(''); const result = await documentsApi.detail(id); setDoc(result); if (result.document_type === 'boleto') { try { setBoleto((await documentsApi.boleto(id)).boleto); } catch {} } } catch (nextError) { setError(nextError.message); } }, [id]);
+  const load = useCallback(async () => { try { setError(''); const result = await documentsApi.detail(id); setDoc(result); await reconcileDocumentDeadlineAlerts(result).catch(() => undefined); if (result.document_type === 'boleto') { try { setBoleto((await documentsApi.boleto(id)).boleto); } catch {} } } catch (nextError) { setError(nextError.message); } }, [id]);
   useEffect(() => { load(); }, [load]);
   const reminder = async (due) => { const settings = await loadNotificationSettings(); const created = await scheduleSingleDeadlineReminder(due, settings); if (!created) return Alert.alert(settings.alertsEnabled ? 'Lembrete indisponível' : 'Alertas desativados', settings.alertsEnabled ? 'Não foi possível criar um lembrete para essa data.' : 'Ative os alertas de prazo no seu perfil.'); Alert.alert('Lembrete criado', settings.quietMode ? 'Vamos avisar você fora do horário silencioso.' : 'Vamos avisar você um dia antes.'); };
   const removeDocument = () => Alert.alert('Excluir documento?', 'O arquivo e a analise serao removidos permanentemente.', [
@@ -85,10 +81,12 @@ export default function DocumentDetail({ id, back }) {
   const actionItems = doc.analysis_action_items || analysis.action_items || [];
   const status = doc.status === 'done' ? 'PRONTO' : doc.status === 'failed' ? 'ERRO' : 'ANALISANDO';
   const dueDate = boletoDueDate(doc, boleto);
+  const normalizedCosts = normalizeCosts(doc.analysis_costs || [], doc.extracted_text || '');
+  const normalizedDeadlines = normalizeDeadlines(doc.analysis_deadlines || [], doc.extracted_text || '');
   const content = () => {
     if (tab === 'Resumo') return <><Text style={styles.summary}>{doc.analysis_summary || 'A análise ainda está sendo processada. Volte em alguns instantes.'}</Text><Text style={styles.sectionTitle}>Ações recomendadas</Text>{actionItems.length ? actionItems.map((item, index) => <DetailCard key={index} style={styles.actionCard}><Text style={styles.actionText}>{typeof item === 'string' ? item : item.descricao || item.description}</Text></DetailCard>) : <Text style={styles.emptyText}>Nenhuma ação identificada.</Text>}</>;
-    if (tab === 'Prazos') return (doc.analysis_deadlines || []).length ? doc.analysis_deadlines.map((item, index) => { const due = deadlineDate(item); const recurring = String(item?.recorrencia || item?.recurrence || '').toLowerCase() === 'mensal'; return <DetailCard key={index} style={styles.dataCard}><View style={styles.dataCopy}><Text style={styles.dataTitle}>{item.description || item.descricao || item}</Text>{due ? <Text style={styles.dataHint}>{date(due)}{recurring ? ' · recorrência mensal' : ''}</Text> : null}</View>{due ? <Pressable onPress={() => reminder(due)} style={styles.smallButton}><Text style={styles.smallButtonText}>Lembrar</Text></Pressable> : null}</DetailCard>; }) : <Text style={styles.emptyText}>Nenhum prazo identificado.</Text>;
-    if (tab === 'Custos') return (doc.analysis_costs || []).length ? doc.analysis_costs.map((item, index) => <DetailCard key={index} style={styles.dataCard}><Text style={styles.dataTitle}>{typeof item === 'string' ? item : `${item.description || 'Custo'}: ${item.amount || item.value || ''}`}</Text></DetailCard>) : <Text style={styles.emptyText}>Nenhum custo identificado.</Text>;
+    if (tab === 'Prazos') return normalizedDeadlines.length ? normalizedDeadlines.map((item, index) => { const due = deadlineDate(item); const recurring = item.recorrencia === 'mensal'; return <DetailCard key={`${item.descricao}-${due}-${index}`} style={styles.dataCard}><View style={styles.dataCopy}><Text style={styles.dataTitle}>{item.descricao}</Text>{due ? <Text style={styles.dataHint}>{date(due)}{recurring ? ' · recorrência mensal' : ''}</Text> : null}</View>{due ? <Pressable onPress={() => reminder(due)} style={styles.smallButton}><Text style={styles.smallButtonText}>Lembrar</Text></Pressable> : null}</DetailCard>; }) : <Text style={styles.emptyText}>Nenhum prazo identificado.</Text>;
+    if (tab === 'Custos') return normalizedCosts.length ? normalizedCosts.map((item, index) => <DetailCard key={`${item.description}-${item.amount}-${index}`} style={styles.dataCard}><View style={styles.dataCopy}><Text style={styles.dataTitle}>{item.description}</Text>{item.amount ? <Text style={styles.dataHint}>{item.amount}</Text> : null}</View></DetailCard>) : <Text style={styles.emptyText}>Nenhum custo identificado.</Text>;
     if (tab === 'Avisos') return (doc.analysis_warnings || []).length ? doc.analysis_warnings.map((item, index) => { const tone = warningTone(item); return <DetailCard key={index} style={[styles.warningCard, styles[`warning${tone.key}`]]}><View style={styles.warningIcon}><TriangleAlert size={17} color={tone.color} /></View><View style={styles.warningCopy}><Text style={[styles.warningLabel, { color: tone.color }]}>{tone.label}</Text><Text style={styles.actionText}>{typeof item === 'string' ? item : item.descricao || item.description}</Text></View></DetailCard>; }) : <Text style={styles.emptyText}>Nenhum aviso identificado.</Text>;
     return <DetailCard><Text selectable style={styles.summary}>{doc.extracted_text || 'O texto extraído ficará disponível quando o processamento terminar.'}</Text><Pressable onPress={async () => { await Clipboard.setStringAsync(doc.extracted_text || ''); Alert.alert('Texto copiado'); }} style={styles.copyButton}><Copy size={15} color="#91E0D8" /><Text style={styles.copyText}>Copiar texto</Text></Pressable></DetailCard>;
   };
