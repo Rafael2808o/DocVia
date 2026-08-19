@@ -4,7 +4,15 @@
 
 O DocVia é um aplicativo móvel para pessoas que querem lidar com documentos do dia a dia com mais clareza e menos preocupação. O produto permite enviar ou digitalizar arquivos, extrair texto, obter análises assistidas por IA e acompanhar prazos relevantes, como vencimentos de boletos.
 
-> Projeto em desenvolvimento ativo. A publicação na Google Play está planejada para uma etapa posterior.
+## Teste o projeto
+
+**[Abrir a central pública do DocVia](https://docvia-privacidade.pages.dev/baixar/)**
+
+- **iPhone, iPad, Android ou computador:** abra a versão web diretamente pelo navegador, sem instalação.
+- **Android:** baixe o APK 1.0.6 assinado, hospedado de forma permanente no portal.
+- **iOS nativo:** preparado para TestFlight; a emissão depende das credenciais Apple Developer do titular.
+
+O portal reúne as opções de teste, a política de privacidade, os termos de uso e a exclusão de conta em um endereço estável para demonstrações acadêmicas e avaliação do projeto.
 
 ## Principais recursos
 

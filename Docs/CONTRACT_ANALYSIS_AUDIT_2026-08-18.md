@@ -99,7 +99,8 @@ O pipeline mantém separadas as responsabilidades:
   monetários.
 - Mobile: TypeScript e ESLint aprovados; Expo Doctor 21/21.
 - Bundles Hermes: exportação iOS e Android aprovada (2.957 módulos em cada).
-- Site: build aprovado e 6 testes aprovados, incluindo `/baixar`.
+- Site: build aprovado e 7 testes aprovados, incluindo `/baixar`, aplicação web
+  e transmissão ordenada das partes do APK.
 - Navegador: página `/baixar` validada em desktop e viewport 390×844, sem erros
   ou avisos no console.
 - Android: APK EAS assinado da versão 1.0.6 (código 7), com 90.482.160 bytes,
@@ -107,9 +108,10 @@ O pipeline mantém separadas as responsabilidades:
   `resources.arsc`) e SHA-256
   `0B1CF4A0E99E7678A01279B801EA646F5B828639C5EEB977CA09278EF15C8BF8`.
 - Distribuição: página pública estável em
-  `https://docvia-privacidade.pages.dev/baixar/`; o artefato direto do EAS
-  expira em 1 de setembro de 2026 e deve ser substituído nessa página por um
-  novo build ou pela distribuição da Play Store.
+  `https://docvia-privacidade.pages.dev/baixar/`, aplicação web em `/app/` e APK
+  permanente em `/downloads/DocVia-1.0.6.apk`. O arquivo público foi baixado
+  novamente após a publicação e manteve os mesmos 90.482.160 bytes e SHA-256 do
+  artefato assinado.
 
 ## Limitações e possíveis falsos positivos/negativos
 
