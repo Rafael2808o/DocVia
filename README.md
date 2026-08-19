@@ -115,7 +115,7 @@ Em produção, a API exige HTTPS, origens CORS restritas, armazenamento privado 
 
 - [Guia de publicação da API](Api/deploy/README.md)
 - [Guia do aplicativo móvel](Mobile/DocVia/README.md)
-- [Status de pré-lançamento](Docs/PRELAUNCH_STATUS_2026-08-13.md)
+- [Guia de produção com Supabase](Docs/SUPABASE_PRODUCTION.md)
 
 Nunca inclua chaves, senhas, tokens ou arquivos `.env` no Git.
 

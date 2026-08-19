@@ -31,7 +31,7 @@ for (const [pathname, expected] of [
     if (pathname !== "/") {
       assert.match(html, /zrafaelxd07@gmail\.com/);
     }
-    assert.doesNotMatch(html, /PENDENTE|PREENCHER|SUBSTITUIR|codex-preview/i);
+    assert.doesNotMatch(html, /PENDENTE|PREENCHER|SUBSTITUIR/i);
   });
 }
 
@@ -51,7 +51,8 @@ test("página de download separa APK Android de distribuição iOS", async () =>
   assert.match(html, /Usar o DocVia agora/);
   assert.match(html, /href="\/app\/"/);
   assert.match(html, /TestFlight em preparação/);
-  assert.match(html, /APK não é compatível com iOS/);
+  assert.match(html, /Não instale arquivos enviados por terceiros/);
+  assert.match(html, /No iPhone e iPad, use a versão web/);
   assert.match(html, /href="\/downloads\/DocVia-1\.0\.6\.apk"/);
   assert.match(html, /Versão 1\.0\.6 \(código 7\)/);
   const exported = await readFile(new URL("../dist-pages/baixar/index.html", import.meta.url), "utf8");

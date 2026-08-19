@@ -38,7 +38,7 @@ export default function DownloadPage() {
             {iosUrl ? <a className="button" href={iosUrl} rel="noreferrer">Abrir no TestFlight</a> : <span className="button disabled-link" aria-disabled="true">TestFlight em preparação</span>}
           </article>
         </section>
-        <div className="notice"><strong>Para enviar ao professor:</strong> compartilhe somente o endereço desta página. No iPhone/iPad ele pode abrir a versão web sem instalar nada; no Android pode escolher entre a versão web e o APK permanente. APK não é compatível com iOS.</div>
+        <div className="notice">Não instale arquivos enviados por terceiros. No iPhone e iPad, use a versão web ou, quando disponível, TestFlight/App Store. No Android, use somente o APK disponibilizado nesta página oficial.</div>
       </main>
       <Footer />
     </LegalShell>
